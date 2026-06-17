@@ -1,0 +1,48 @@
+name: Test title and description schema metadata
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+          title: "My Helm Chart Values"
+          description: "Schema for my Helm chart values file"
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: expected /tmp/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains title and description
+        run: |
+          SCHEMA=$(cat /tmp/values.schema.json)
+          echo "Schema content: $SCHEMA"
+          python3 << 'PYEOF'
+          import json
+          with open('/tmp/values.schema.json') as f:
+              schema = json.load(f)
+          print(f"Schema keys: {list(schema.keys())}")
+          assert schema.get('title') == 'My Helm Chart Values', f"Expected title 'My Helm Chart Values', got: {schema.get('title')}"
+          assert schema.get('description') == 'Schema for my Helm chart values file', f"Expected description 'Schema for my Helm chart values file', got: {schema.get('description')}"
+          print("PASS: schema contains correct title and description")
+          PYEOF

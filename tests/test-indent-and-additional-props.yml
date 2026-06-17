@@ -1,0 +1,61 @@
+name: Test indent and additionalProperties options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+          indent: 4
+          additionalProperties: "true"
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: expected /tmp/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema uses 4-space indentation
+        run: |
+          SCHEMA=$(cat /tmp/values.schema.json)
+          echo "Schema content:"
+          echo "$SCHEMA"
+          # Check that the file uses 4-space indentation (lines starting with 4 spaces)
+          if ! grep -E '^ {4}' /tmp/values.schema.json > /dev/null 2>&1; then
+            echo "FAIL: schema does not appear to use 4-space indentation"
+            exit 1
+          fi
+          echo "PASS: schema uses 4-space indentation"
+
+      - name: Assert schema has additionalProperties set
+        run: |
+          python3 << 'PYEOF'
+          import json
+          with open('/tmp/values.schema.json') as f:
+              schema = json.load(f)
+          print(f"Schema keys: {list(schema.keys())}")
+          assert 'additionalProperties' in schema, f"Expected 'additionalProperties' in schema root, got keys: {list(schema.keys())}"
+          print(f"additionalProperties value: {schema['additionalProperties']}")
+          print("PASS: schema contains additionalProperties")
+          PYEOF

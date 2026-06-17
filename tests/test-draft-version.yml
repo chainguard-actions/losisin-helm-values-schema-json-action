@@ -1,0 +1,67 @@
+name: Test draft version selection
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - id: action-draft-2020
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values-draft2020.schema.json
+          draft: 2020
+
+      - name: Assert draft 2020 schema file was created
+        run: |
+          if [ ! -f /tmp/values-draft2020.schema.json ]; then
+            echo "FAIL: expected /tmp/values-draft2020.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: draft 2020 schema file exists"
+
+      - name: Assert draft 2020 schema contains correct schema URI
+        run: |
+          SCHEMA=$(cat /tmp/values-draft2020.schema.json)
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert '2020' in s.get('\$schema',''), f'expected 2020 in schema URI, got: {s.get(\"\$schema\",\"\")}'"; then
+            echo "FAIL: schema does not reference draft 2020"
+            exit 1
+          fi
+          echo "PASS: schema references draft 2020"
+
+      - id: action-draft-4
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values-draft4.schema.json
+          draft: 4
+
+      - name: Assert draft 4 schema file was created
+        run: |
+          if [ ! -f /tmp/values-draft4.schema.json ]; then
+            echo "FAIL: expected /tmp/values-draft4.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: draft 4 schema file exists"
+
+      - name: Assert draft 4 schema contains correct schema URI
+        run: |
+          SCHEMA=$(cat /tmp/values-draft4.schema.json)
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'draft-04' in s.get('\$schema','') or '04' in s.get('\$schema',''), f'expected draft-04 in schema URI, got: {s.get(\"\$schema\",\"\")}'"; then
+            echo "FAIL: schema does not reference draft 4"
+            exit 1
+          fi
+          echo "PASS: schema references draft 4"

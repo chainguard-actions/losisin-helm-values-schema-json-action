@@ -1,0 +1,65 @@
+name: Test id and noAdditionalProperties options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+          id: "https://example.com/schemas/my-chart"
+          noAdditionalProperties: "true"
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: expected /tmp/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains the specified id
+        run: |
+          python3 << 'PYEOF'
+          import json
+          with open('/tmp/values.schema.json') as f:
+              schema = json.load(f)
+          print(f"Schema keys: {list(schema.keys())}")
+          schema_id = schema.get('$id', '')
+          print(f"$id value: {schema_id}")
+          assert schema_id == 'https://example.com/schemas/my-chart', \
+              f"Expected '$id' to be 'https://example.com/schemas/my-chart', got: {schema_id!r}"
+          print("PASS: schema contains expected $id")
+          PYEOF
+
+      - name: Assert schema has noAdditionalProperties set
+        run: |
+          python3 << 'PYEOF'
+          import json
+          with open('/tmp/values.schema.json') as f:
+              schema = json.load(f)
+          print(f"Schema keys: {list(schema.keys())}")
+          ap = schema.get('additionalProperties')
+          print(f"additionalProperties value: {ap}")
+          assert ap == False, \
+              f"Expected 'additionalProperties' to be false (noAdditionalProperties=true), got: {ap!r}"
+          print("PASS: schema has additionalProperties=false")
+          PYEOF

@@ -1,0 +1,47 @@
+name: Test fail-on-diff when schemas match
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - name: Generate initial schema
+        id: initial-gen
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+
+      - name: Assert initial schema was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: initial schema not created"
+            exit 1
+          fi
+          echo "PASS: initial schema created"
+          cat /tmp/values.schema.json
+
+      - name: Run again with fail-on-diff (should pass since output is outside git workspace)
+        id: action-no-diff
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+          fail-on-diff: "true"
+
+      - name: Assert action succeeded (no diff detected for out-of-workspace output)
+        run: |
+          echo "PASS: action succeeded with fail-on-diff=true"

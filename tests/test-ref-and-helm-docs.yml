@@ -1,0 +1,57 @@
+name: Test ref and useHelmDocs options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml with helm-docs comments
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          # -- Number of replicas
+          replicaCount: 1
+          image:
+            # -- Docker image repository
+            repository: nginx
+            # -- Docker image tag
+            tag: latest
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+          ref: "https://example.com/schemas/base"
+          useHelmDocs: "true"
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: expected /tmp/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('/tmp/values.schema.json'))"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains expected structure
+        run: |
+          python3 << 'PYEOF'
+          import json
+          with open('/tmp/values.schema.json') as f:
+              schema = json.load(f)
+          print(f"Schema: {json.dumps(schema, indent=2)}")
+          assert 'properties' in schema or '$schema' in schema, \
+              f"Expected schema to have 'properties' or '$schema', got keys: {list(schema.keys())}"
+          print("PASS: schema has expected structure")
+          PYEOF

@@ -1,0 +1,53 @@
+name: Test working-directory option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CHART_DIR: helm-chart-test
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create working directory with values file inside workspace
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/$CHART_DIR"
+          cat > "$GITHUB_WORKSPACE/$CHART_DIR/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml
+          output: values.schema.json
+          draft: 7
+          working-directory: ${{ github.workspace }}/helm-chart-test
+
+      - name: Assert schema file was created in working directory
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/$CHART_DIR/values.schema.json" ]; then
+            echo "FAIL: expected $GITHUB_WORKSPACE/$CHART_DIR/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists in working directory"
+
+      - name: Assert schema is valid JSON with expected structure
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          chart_dir = os.environ.get('CHART_DIR', 'helm-chart-test')
+          schema_path = os.path.join(os.environ['GITHUB_WORKSPACE'], chart_dir, 'values.schema.json')
+          with open(schema_path) as f:
+              schema = json.load(f)
+          print(f"Schema: {json.dumps(schema, indent=2)}")
+          assert 'properties' in schema or '$schema' in schema, f"Schema missing expected structure, keys: {list(schema.keys())}"
+          print("PASS: schema has expected structure")
+          PYEOF

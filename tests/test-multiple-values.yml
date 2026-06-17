@@ -1,0 +1,56 @@
+name: Test multiple values files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create multiple values files
+        run: |
+          cat > /tmp/values1.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+          cat > /tmp/values2.yaml << 'EOF'
+          service:
+            type: ClusterIP
+            port: 80
+          ingress:
+            enabled: false
+            host: example.com
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values1.yaml,/tmp/values2.yaml
+          output: /tmp/merged.schema.json
+          draft: 7
+
+      - name: Assert merged schema file was created
+        run: |
+          if [ ! -f /tmp/merged.schema.json ]; then
+            echo "FAIL: expected /tmp/merged.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: merged schema file exists"
+
+      - name: Assert merged schema contains fields from both files
+        run: |
+          SCHEMA=$(cat /tmp/merged.schema.json)
+          echo "Schema content: $SCHEMA"
+          python3 << 'PYEOF'
+          import json, sys
+          with open('/tmp/merged.schema.json') as f:
+              schema = json.load(f)
+          props = schema.get('properties', {})
+          print(f"Properties found: {list(props.keys())}")
+          assert 'replicaCount' in props or 'image' in props, f"Expected fields from values1.yaml not found in: {list(props.keys())}"
+          assert 'service' in props or 'ingress' in props, f"Expected fields from values2.yaml not found in: {list(props.keys())}"
+          print("PASS: merged schema contains fields from both values files")
+          PYEOF

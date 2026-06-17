@@ -1,0 +1,53 @@
+name: Test basic schema generation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml
+        run: |
+          cat > /tmp/values.yaml << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: /tmp/values.yaml
+          output: /tmp/values.schema.json
+          draft: 7
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f /tmp/values.schema.json ]; then
+            echo "FAIL: expected /tmp/values.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('/tmp/values.schema.json'))"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains expected fields
+        run: |
+          SCHEMA=$(cat /tmp/values.schema.json)
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'properties' in s or '\$schema' in s, 'missing expected keys'"; then
+            echo "FAIL: schema missing expected structure"
+            exit 1
+          fi
+          echo "PASS: schema has expected structure"

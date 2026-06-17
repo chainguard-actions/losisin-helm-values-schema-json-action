@@ -1,0 +1,68 @@
+name: Test useHelmDocs option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file with helm-docs comments
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-docs-test"
+          cat > "$GITHUB_WORKSPACE/helm-docs-test/values.yaml" << 'EOF'
+          # -- Number of replicas to deploy
+          replicaCount: 1
+          image:
+            # -- Docker image repository
+            repository: nginx
+            # -- Docker image tag
+            tag: latest
+          service:
+            # -- Kubernetes service type
+            type: ClusterIP
+            # -- Service port
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-docs-test/values.yaml
+          output: helm-docs-test/values.schema.json
+          draft: 7
+          useHelmDocs: "true"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-docs-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-docs-test/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-docs-test/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains properties
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-docs-test/values.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert 'properties' in d, f'Expected properties in schema, got keys: {list(d.keys())}'
+          print('PASS: schema contains properties')
+          "; then
+            echo "FAIL: schema missing expected properties"
+            exit 1
+          fi
+          echo "PASS"

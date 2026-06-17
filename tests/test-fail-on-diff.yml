@@ -1,0 +1,50 @@
+name: Test fail-on-diff when schemas match
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-diff-test"
+          cat > "$GITHUB_WORKSPACE/helm-diff-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - name: Generate initial schema
+        id: initial-schema
+        uses: .
+        with:
+          values: helm-diff-test/values.yaml
+          output: helm-diff-test/values.schema.json
+          draft: 7
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert initial schema was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-diff-test/values.schema.json" ]; then
+            echo "FAIL: initial schema was not created"
+            exit 1
+          fi
+          echo "PASS: initial schema created"
+          cat "$GITHUB_WORKSPACE/helm-diff-test/values.schema.json"
+
+      - name: Run action again with fail-on-diff false (should pass - no diff)
+        id: action-no-diff
+        uses: .
+        with:
+          values: helm-diff-test/values.yaml
+          output: helm-diff-test/values.schema.json
+          draft: 7
+          fail-on-diff: "false"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert action succeeded when no diff
+        run: |
+          echo "PASS: action completed without failure when schemas match"

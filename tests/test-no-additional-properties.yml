@@ -1,0 +1,66 @@
+name: Test noAdditionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-noadd-test"
+          cat > "$GITHUB_WORKSPACE/helm-noadd-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-noadd-test/values.yaml
+          output: helm-noadd-test/values.schema.json
+          draft: 7
+          noAdditionalProperties: "true"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert additionalProperties is false in schema and nested objects
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          # noAdditionalProperties should set additionalProperties: false at root and in child objects
+          root_val = d.get('additionalProperties')
+          print(f'Root additionalProperties: {root_val}')
+          assert root_val == False, f'Expected root additionalProperties to be false, got: {root_val}'
+          print('PASS: noAdditionalProperties correctly set to false at root')
+          "; then
+            echo "FAIL: noAdditionalProperties not applied correctly"
+            exit 1
+          fi
+          echo "PASS"

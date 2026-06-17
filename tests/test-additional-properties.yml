@@ -1,0 +1,88 @@
+name: Test additionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-addprops-test"
+          cat > "$GITHUB_WORKSPACE/helm-addprops-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - name: Generate schema with additionalProperties false
+        id: action-no-additional
+        uses: .
+        with:
+          values: helm-addprops-test/values.yaml
+          output: helm-addprops-test/values-no-additional.schema.json
+          draft: 7
+          additionalProperties: "false"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-addprops-test/values-no-additional.schema.json" ]; then
+            echo "FAIL: schema file was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-addprops-test/values-no-additional.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-addprops-test/values-no-additional.schema.json"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert additionalProperties is false in schema
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-addprops-test/values-no-additional.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('additionalProperties') == False, f'additionalProperties should be false, got: {d.get(\"additionalProperties\")}'
+          print('additionalProperties is correctly set to false')
+          "; then
+            echo "FAIL: additionalProperties is not set to false in schema"
+            exit 1
+          fi
+          echo "PASS: additionalProperties is correctly set to false"
+
+      - name: Generate schema with additionalProperties true
+        id: action-with-additional
+        uses: .
+        with:
+          values: helm-addprops-test/values.yaml
+          output: helm-addprops-test/values-with-additional.schema.json
+          draft: 7
+          additionalProperties: "true"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert additionalProperties is true in schema
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-addprops-test/values-with-additional.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          val = d.get('additionalProperties')
+          assert val == True or val is None, f'additionalProperties should be true or absent, got: {val}'
+          print('additionalProperties is correctly set')
+          "; then
+            echo "FAIL: additionalProperties is not set correctly"
+            exit 1
+          fi
+          echo "PASS: additionalProperties is correctly set to true"

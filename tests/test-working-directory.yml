@@ -1,0 +1,70 @@
+name: Test working directory option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test chart directory structure
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-workdir-test/mychart"
+          cat > "$GITHUB_WORKSPACE/helm-workdir-test/mychart/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: myapp
+            tag: "1.0.0"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml
+          output: values.schema.json
+          draft: 2019
+          working-directory: ${{ github.workspace }}/helm-workdir-test/mychart
+
+      - name: Assert schema file was created in working directory
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-workdir-test/mychart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created in working directory"
+            ls -la "$GITHUB_WORKSPACE/helm-workdir-test/mychart/"
+            exit 1
+          fi
+          echo "PASS: schema file exists in working directory"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-workdir-test/mychart/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-workdir-test/mychart/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains expected properties
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-workdir-test/mychart/values.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          props = d.get('properties', {})
+          assert 'replicaCount' in props, 'missing replicaCount'
+          assert 'image' in props, 'missing image'
+          assert 'resources' in props, 'missing resources'
+          print('All expected properties found')
+          "; then
+            echo "FAIL: schema missing expected properties"
+            exit 1
+          fi
+          echo "PASS: schema contains expected properties"

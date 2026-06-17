@@ -1,0 +1,67 @@
+name: Test draft version selection
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-draft-test"
+          cat > "$GITHUB_WORKSPACE/helm-draft-test/values.yaml" << 'EOF'
+          name: myapp
+          enabled: true
+          replicas: 2
+          EOF
+
+      - id: action-draft4
+        uses: .
+        with:
+          values: helm-draft-test/values.yaml
+          output: helm-draft-test/values-draft4.schema.json
+          draft: 4
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert draft 4 schema is valid JSON
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-draft-test/values-draft4.schema.json" ]; then
+            echo "FAIL: draft 4 schema file was not created"
+            exit 1
+          fi
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-draft-test/values-draft4.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: draft 4 output is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: draft 4 schema is valid JSON"
+
+      - name: Assert draft 4 schema URI
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft-test/values-draft4.schema.json")
+          echo "Draft 4 schema:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | grep -q "draft-04\|draft/4"; then
+            echo "FAIL: schema does not reference draft-04"
+            exit 1
+          fi
+          echo "PASS: schema references draft-04"
+
+      - id: action-draft7
+        uses: .
+        with:
+          values: helm-draft-test/values.yaml
+          output: helm-draft-test/values-draft7.schema.json
+          draft: 7
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert draft 7 schema URI
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft-test/values-draft7.schema.json")
+          echo "Draft 7 schema:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | grep -q "draft-07\|draft/7"; then
+            echo "FAIL: schema does not reference draft-07"
+            exit 1
+          fi
+          echo "PASS: schema references draft-07"

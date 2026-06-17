@@ -1,0 +1,58 @@
+name: Test basic schema generation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-test"
+          cat > "$GITHUB_WORKSPACE/helm-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+            pullPolicy: IfNotPresent
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-test/values.yaml
+          output: helm-test/values.schema.json
+          draft: 7
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-test/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-test/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains expected fields
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-test/values.schema.json")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'properties' in d or '\$schema' in d, 'missing expected fields'"; then
+            echo "FAIL: schema missing expected fields"
+            exit 1
+          fi
+          echo "PASS: schema contains expected fields"

@@ -1,0 +1,66 @@
+name: Test working-directory and additionalProperties
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file in working directory
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-workdir"
+          cat > "$GITHUB_WORKSPACE/helm-workdir/values.yaml" << 'EOF'
+          appName: myapp
+          port: 8080
+          enabled: true
+          config:
+            logLevel: info
+            debug: false
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml
+          output: values.schema.json
+          draft: 7
+          indent: 2
+          additionalProperties: true
+          working-directory: ${{ github.workspace }}/helm-workdir
+
+      - name: Assert schema file was created in working directory
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-workdir/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created in working directory"
+            exit 1
+          fi
+          echo "PASS: schema file exists in working directory"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-workdir/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-workdir/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: output is valid JSON"
+
+      - name: Assert schema contains expected properties
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-workdir/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); props=d.get('properties',{}); assert 'appName' in props, 'missing appName'; assert 'port' in props, 'missing port'; assert 'enabled' in props, 'missing enabled'; assert 'config' in props, 'missing config'" 2>&1; then
+            echo "FAIL: schema missing expected properties"
+            exit 1
+          fi
+          echo "PASS: schema contains all expected properties"
+
+      - name: Assert additionalProperties is set to true
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-workdir/values.schema.json")
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); ap=d.get('additionalProperties'); assert ap==True, f'Expected additionalProperties=True, got: {ap}'" 2>&1; then
+            echo "FAIL: additionalProperties not set to true"
+            exit 1
+          fi
+          echo "PASS: additionalProperties is true"

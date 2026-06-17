@@ -1,0 +1,59 @@
+name: Test fail-on-diff with no diff (should pass)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-diff"
+          cat > "$GITHUB_WORKSPACE/helm-diff/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - name: Generate initial schema
+        id: initial
+        uses: .
+        with:
+          values: ${{ github.workspace }}/helm-diff/values.yaml
+          output: ${{ github.workspace }}/helm-diff/values.schema.json
+          draft: 7
+          indent: 4
+
+      - name: Verify initial schema was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-diff/values.schema.json" ]; then
+            echo "FAIL: initial schema was not created"
+            exit 1
+          fi
+          echo "Initial schema created:"
+          cat "$GITHUB_WORKSPACE/helm-diff/values.schema.json"
+          echo "PASS"
+
+      - name: Run action again with fail-on-diff false (should not fail since schema is same)
+        id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/helm-diff/values.yaml
+          output: ${{ github.workspace }}/helm-diff/values.schema.json
+          draft: 7
+          indent: 4
+          fail-on-diff: false
+
+      - name: Assert schema file still exists and is valid
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-diff/values.schema.json" ]; then
+            echo "FAIL: schema file missing after second run"
+            exit 1
+          fi
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-diff/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: schema is not valid JSON after second run"
+            exit 1
+          fi
+          echo "PASS: schema file is valid after second run"

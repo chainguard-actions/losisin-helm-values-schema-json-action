@@ -1,0 +1,100 @@
+name: Test different draft versions
+on:
+  workflow_dispatch:
+jobs:
+  test-draft-4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-draft4"
+          cat > "$GITHUB_WORKSPACE/helm-draft4/values.yaml" << 'EOF'
+          name: myapp
+          replicas: 2
+          enabled: false
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/helm-draft4/values.yaml
+          output: ${{ github.workspace }}/helm-draft4/values.schema.json
+          draft: 4
+          indent: 4
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-draft4/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-draft4/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: output is not valid JSON"
+            cat "$GITHUB_WORKSPACE/helm-draft4/values.schema.json"
+            exit 1
+          fi
+          echo "PASS: output is valid JSON"
+
+      - name: Assert schema uses draft-04
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft4/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); schema_url=d.get('\$schema',''); assert 'draft-04' in schema_url, f'Expected draft-04 in schema URL, got: {schema_url}'" 2>&1; then
+            echo "FAIL: schema does not use draft-04"
+            exit 1
+          fi
+          echo "PASS: schema uses draft-04"
+
+      - name: Assert schema has correct structure
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft4/values.schema.json")
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('type')=='object', f'Expected type=object, got: {d.get(\"type\")}'; props=d.get('properties',{}); assert 'name' in props; assert 'replicas' in props; assert 'enabled' in props" 2>&1; then
+            echo "FAIL: schema structure is incorrect"
+            exit 1
+          fi
+          echo "PASS: schema has correct structure"
+
+  test-draft-2019:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-draft2019"
+          cat > "$GITHUB_WORKSPACE/helm-draft2019/values.yaml" << 'EOF'
+          name: myapp
+          replicas: 2
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/helm-draft2019/values.yaml
+          output: ${{ github.workspace }}/helm-draft2019/values.schema.json
+          draft: 2019
+          indent: 2
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-draft2019/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema uses draft 2019-09
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft2019/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys,json; d=json.load(sys.stdin); schema_url=d.get('\$schema',''); assert '2019-09' in schema_url, f'Expected 2019-09 in schema URL, got: {schema_url}'" 2>&1; then
+            echo "FAIL: schema does not use draft 2019-09"
+            exit 1
+          fi
+          echo "PASS: schema uses draft 2019-09"

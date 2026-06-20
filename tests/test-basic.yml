@@ -1,0 +1,75 @@
+name: Test basic schema generation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-basic-output"
+          cat > "$GITHUB_WORKSPACE/test-basic-output/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+            pullPolicy: IfNotPresent
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-basic-output/values.yaml
+          output: test-basic-output/values.schema.json
+          draft: 7
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-basic-output/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains expected fields
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-basic-output/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"replicaCount"'; then
+            echo "FAIL: schema does not contain replicaCount"
+            exit 1
+          fi
+          if ! echo "$SCHEMA" | grep -q '"image"'; then
+            echo "FAIL: schema does not contain image"
+            exit 1
+          fi
+          if ! echo "$SCHEMA" | grep -q '"service"'; then
+            echo "FAIL: schema does not contain service"
+            exit 1
+          fi
+          echo "PASS: schema contains expected fields"
+
+      - name: Assert schema has correct draft version
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-basic-output/values.schema.json")
+          if ! echo "$SCHEMA" | grep -q 'json-schema.org/draft-07'; then
+            echo "FAIL: schema does not reference draft-07"
+            exit 1
+          fi
+          echo "PASS: schema has correct draft version"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path output is set"

@@ -1,0 +1,63 @@
+name: Test fail-on-diff with no diff
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-diff-output"
+          cat > "$GITHUB_WORKSPACE/test-diff-output/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - name: Generate initial schema
+        id: initial
+        uses: .
+        with:
+          values: test-diff-output/values.yaml
+          output: test-diff-output/values.schema.json
+          draft: 7
+
+      - name: Assert initial schema was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-diff-output/values.schema.json" ]; then
+            echo "FAIL: initial schema was not created"
+            exit 1
+          fi
+          echo "PASS: initial schema created"
+
+      - name: Commit the generated schema so second run sees no diff
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          git add "$GITHUB_WORKSPACE/test-diff-output/"
+          git commit -m "add test schema" || echo "nothing to commit"
+
+      - name: Run action again with fail-on-diff false (should pass - no diff)
+        id: action
+        uses: .
+        with:
+          values: test-diff-output/values.yaml
+          output: test-diff-output/values.schema.json
+          draft: 7
+          fail-on-diff: "false"
+
+      - name: Assert schema still exists and is valid
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-diff-output/values.schema.json" ]; then
+            echo "FAIL: schema file missing after second run"
+            exit 1
+          fi
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-diff-output/values.schema.json")
+          if ! echo "$SCHEMA" | grep -q '"replicaCount"'; then
+            echo "FAIL: schema does not contain replicaCount"
+            exit 1
+          fi
+          echo "PASS: schema is valid after second run"

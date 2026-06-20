@@ -1,0 +1,51 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test chart directory structure
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-workdir-chart"
+          cat > "$GITHUB_WORKSPACE/test-workdir-chart/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          ingress:
+            enabled: false
+            host: chart.example.com
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml
+          output: values.schema.json
+          draft: 7
+          working-directory: test-workdir-chart
+
+      - name: Assert schema file was created in working directory
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-workdir-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created in working directory"
+            exit 1
+          fi
+          echo "PASS: schema file exists in working directory"
+
+      - name: Assert schema contains expected fields
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-workdir-chart/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"service"'; then
+            echo "FAIL: schema does not contain service"
+            exit 1
+          fi
+          if ! echo "$SCHEMA" | grep -q '"ingress"'; then
+            echo "FAIL: schema does not contain ingress"
+            exit 1
+          fi
+          echo "PASS: schema contains expected fields"

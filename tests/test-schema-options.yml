@@ -1,0 +1,64 @@
+name: Test schema options (title, description, indent)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-opts-output"
+          cat > "$GITHUB_WORKSPACE/test-opts-output/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-opts-output/values.yaml
+          output: test-opts-output/values.schema.json
+          draft: 7
+          indent: 4
+          title: "My Helm Chart Schema"
+          description: "Schema for my Helm chart values"
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-opts-output/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains title
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-opts-output/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"My Helm Chart Schema"'; then
+            echo "FAIL: schema does not contain expected title"
+            exit 1
+          fi
+          echo "PASS: schema contains expected title"
+
+      - name: Assert schema contains description
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-opts-output/values.schema.json")
+          if ! echo "$SCHEMA" | grep -q '"Schema for my Helm chart values"'; then
+            echo "FAIL: schema does not contain expected description"
+            exit 1
+          fi
+          echo "PASS: schema contains expected description"
+
+      - name: Assert schema uses 4-space indentation
+        run: |
+          # Check that the file uses 4-space indentation (lines starting with 4 spaces)
+          if ! grep -E '^    "' "$GITHUB_WORKSPACE/test-opts-output/values.schema.json"; then
+            echo "FAIL: schema does not appear to use 4-space indentation"
+            exit 1
+          fi
+          echo "PASS: schema uses 4-space indentation"

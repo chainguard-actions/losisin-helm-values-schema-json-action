@@ -1,0 +1,65 @@
+name: Test multiple values files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-multi-output"
+          cat > "$GITHUB_WORKSPACE/test-multi-output/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+          cat > "$GITHUB_WORKSPACE/test-multi-output/values-extra.yaml" << 'EOF'
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-multi-output/values.yaml,test-multi-output/values-extra.yaml
+          output: test-multi-output/values.schema.json
+          draft: 2020
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-multi-output/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains fields from both files
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-multi-output/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"replicaCount"'; then
+            echo "FAIL: schema does not contain replicaCount from first file"
+            exit 1
+          fi
+          if ! echo "$SCHEMA" | grep -q '"resources"'; then
+            echo "FAIL: schema does not contain resources from second file"
+            exit 1
+          fi
+          echo "PASS: schema contains fields from both values files"
+
+      - name: Assert schema has draft 2020 version
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-multi-output/values.schema.json")
+          if ! echo "$SCHEMA" | grep -q '2020-12'; then
+            echo "FAIL: schema does not reference draft 2020-12"
+            exit 1
+          fi
+          echo "PASS: schema has correct draft 2020-12 version"

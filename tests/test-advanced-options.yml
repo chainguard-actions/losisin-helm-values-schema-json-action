@@ -1,0 +1,63 @@
+name: Test advanced schema options (id, ref, additionalProperties, noAdditionalProperties, useHelmDocs)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test values file with helm-docs comments
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-advanced-output"
+          cat > "$GITHUB_WORKSPACE/test-advanced-output/values.yaml" << 'EOF'
+          # -- Number of replicas
+          replicaCount: 1
+          # -- Container image settings
+          image:
+            # -- Image repository
+            repository: nginx
+            # -- Image tag
+            tag: latest
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-advanced-output/values.yaml
+          output: test-advanced-output/values.schema.json
+          draft: 7
+          id: "https://example.com/schemas/my-chart"
+          ref: "https://example.com/schemas/base"
+          additionalProperties: true
+          noAdditionalProperties: false
+          useHelmDocs: true
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-advanced-output/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema contains expected fields
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-advanced-output/values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"replicaCount"'; then
+            echo "FAIL: schema does not contain replicaCount"
+            exit 1
+          fi
+          echo "PASS: schema contains expected fields"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path output is set"

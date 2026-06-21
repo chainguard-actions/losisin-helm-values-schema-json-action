@@ -1,0 +1,56 @@
+name: Test multiple values files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+      RUNNER_TOOL_CACHE: /tmp/tool-cache
+      RUNNER_TEMP: /tmp/runner-temp
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml,values2.yaml
+          output: /tmp/merged.schema.json
+          draft: "2020"
+          working-directory: ${{ github.workspace }}/tests/fixtures
+
+      - name: Assert merged output file was created
+        run: |
+          if [ ! -f "/tmp/merged.schema.json" ]; then
+            echo "FAIL: merged output file /tmp/merged.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: merged output file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool /tmp/merged.schema.json > /dev/null 2>&1; then
+            echo "FAIL: merged schema is not valid JSON"
+            cat /tmp/merged.schema.json
+            exit 1
+          fi
+          echo "PASS: merged schema is valid JSON"
+
+      - name: Assert schema contains properties from both files
+        run: |
+          SCHEMA=$(cat /tmp/merged.schema.json)
+          echo "Schema content:"
+          echo "$SCHEMA"
+          # Check for a property from values.yaml (replicaCount)
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); props = d.get('properties', {}); assert 'replicaCount' in props, f'missing replicaCount, got: {list(props.keys())}'"; then
+            echo "FAIL: schema missing replicaCount from values.yaml"
+            exit 1
+          fi
+          echo "PASS: schema contains replicaCount from values.yaml"
+          # Check for a property from values2.yaml (ingress)
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); props = d.get('properties', {}); assert 'ingress' in props, f'missing ingress, got: {list(props.keys())}'"; then
+            echo "FAIL: schema missing ingress from values2.yaml"
+            exit 1
+          fi
+          echo "PASS: schema contains ingress from values2.yaml"

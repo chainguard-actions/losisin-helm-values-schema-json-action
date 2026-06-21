@@ -1,0 +1,62 @@
+name: Test additionalProperties and id inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+      RUNNER_TOOL_CACHE: /tmp/tool-cache
+      RUNNER_TEMP: /tmp/runner-temp
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: /tmp/values-addl.schema.json
+          draft: "2020"
+          id: "https://example.com/schemas/my-chart"
+          additionalProperties: "true"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert output file was created
+        run: |
+          if [ ! -f "/tmp/values-addl.schema.json" ]; then
+            echo "FAIL: output file /tmp/values-addl.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: output file exists"
+
+      - name: Assert output is valid JSON
+        run: |
+          if ! python3 -m json.tool /tmp/values-addl.schema.json > /dev/null 2>&1; then
+            echo "FAIL: output file is not valid JSON"
+            cat /tmp/values-addl.schema.json
+            exit 1
+          fi
+          echo "PASS: output file is valid JSON"
+
+      - name: Assert schema contains id field
+        run: |
+          SCHEMA=$(cat /tmp/values-addl.schema.json)
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); assert '\$id' in d or 'id' in d, 'missing id'"; then
+            echo "FAIL: schema does not contain id field"
+            exit 1
+          fi
+          echo "PASS: schema contains id field"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path output is set"

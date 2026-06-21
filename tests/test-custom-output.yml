@@ -1,0 +1,72 @@
+name: Test custom output and draft version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+      RUNNER_TOOL_CACHE: /tmp/tool-cache
+      RUNNER_TEMP: /tmp/runner-temp
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: /tmp/my.custom.schema.json
+          draft: "7"
+          indent: "2"
+          title: "My Helm Chart Schema"
+          description: "Schema for my helm chart values"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert custom output file was created
+        run: |
+          if [ ! -f "/tmp/my.custom.schema.json" ]; then
+            echo "FAIL: custom output file /tmp/my.custom.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: custom output file exists"
+
+      - name: Assert schema uses draft 7
+        run: |
+          SCHEMA=$(cat /tmp/my.custom.schema.json)
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); assert 'http://json-schema.org/draft-07/schema' in d.get('\$schema', ''), f'expected draft-07 schema, got: {d.get(\"\$schema\", \"\")}'"; then
+            echo "FAIL: schema does not use draft-07"
+            exit 1
+          fi
+          echo "PASS: schema uses draft-07"
+
+      - name: Assert schema has title
+        run: |
+          SCHEMA=$(cat /tmp/my.custom.schema.json)
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); assert d.get('title') == 'My Helm Chart Schema', f'expected title, got: {d.get(\"title\")}'"; then
+            echo "FAIL: schema does not have expected title"
+            exit 1
+          fi
+          echo "PASS: schema has expected title"
+
+      - name: Assert schema has description
+        run: |
+          SCHEMA=$(cat /tmp/my.custom.schema.json)
+          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); assert d.get('description') == 'Schema for my helm chart values', f'expected description, got: {d.get(\"description\")}'"; then
+            echo "FAIL: schema does not have expected description"
+            exit 1
+          fi
+          echo "PASS: schema has expected description"
+
+      - name: Assert indent is 2 spaces
+        run: |
+          # Check that the file uses 2-space indentation (not 4)
+          FIRST_INDENTED=$(grep -m1 "^  [^ ]" /tmp/my.custom.schema.json || true)
+          echo "First indented line: '$FIRST_INDENTED'"
+          if echo "$FIRST_INDENTED" | grep -q "^    "; then
+            echo "FAIL: file appears to use 4-space indentation instead of 2"
+            exit 1
+          fi
+          echo "PASS: file uses 2-space indentation"

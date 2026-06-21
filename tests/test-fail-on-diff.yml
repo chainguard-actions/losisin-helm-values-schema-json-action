@@ -1,0 +1,42 @@
+name: Test fail-on-diff with no diff
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+      RUNNER_TOOL_CACHE: /tmp/tool-cache
+      RUNNER_TEMP: /tmp/runner-temp
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # First generate the schema so we have a baseline
+      - name: Generate baseline schema
+        id: baseline
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: /tmp/baseline.schema.json
+          draft: "2020"
+          working-directory: ${{ github.workspace }}
+
+      - name: Copy baseline to working location
+        run: |
+          cp /tmp/baseline.schema.json /tmp/nodiff.schema.json
+
+      # Run again with fail-on-diff - should succeed because output is in /tmp
+      # (outside git repo, so git.status() won't detect any diff)
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: /tmp/nodiff.schema.json
+          draft: "2020"
+          fail-on-diff: "true"
+          working-directory: ${{ github.workspace }}
+
+      - name: Assert action succeeded (no diff detected)
+        run: |
+          echo "PASS: action succeeded with fail-on-diff=true and no diff"

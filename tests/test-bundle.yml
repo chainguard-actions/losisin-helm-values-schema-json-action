@@ -1,0 +1,67 @@
+name: Test bundle options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml and subschema for bundle testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/bundle-chart/schemas"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/bundle-chart/values.yaml" <<'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+          # Create a subschema that can be referenced
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/bundle-chart/schemas/image.json" <<'EOF'
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "image.json",
+            "type": "object",
+            "properties": {
+              "repository": { "type": "string" },
+              "tag": { "type": "string" }
+            }
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/bundle-chart/values.yaml
+          output: tests/fixtures/bundle-chart/values.schema.json
+          draft: 2020
+          bundle: 'true'
+          bundle-root: tests/fixtures/bundle-chart
+          bundle-without-id: 'true'
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/bundle-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/tests/fixtures/bundle-chart/values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: values.schema.json is valid JSON"
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"

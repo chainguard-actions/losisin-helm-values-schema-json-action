@@ -1,0 +1,72 @@
+name: Test additionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/addprops-chart"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/addprops-chart/values.yaml" <<'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/addprops-chart/values.yaml
+          output: tests/fixtures/addprops-chart/values.schema.json
+          draft: 2020
+          additionalProperties: 'false'
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/addprops-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/tests/fixtures/addprops-chart/values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: values.schema.json is valid JSON"
+
+      - name: Assert schema contains additionalProperties false at root
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/addprops-chart/values.schema.json")
+          echo "schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import json, sys
+          schema = json.load(sys.stdin)
+          if schema.get('additionalProperties') is False:
+              print('PASS: additionalProperties is false at root')
+          else:
+              print('FAIL: additionalProperties is not false at root, got:', schema.get('additionalProperties'))
+              sys.exit(1)
+          "; then
+            exit 1
+          fi
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"

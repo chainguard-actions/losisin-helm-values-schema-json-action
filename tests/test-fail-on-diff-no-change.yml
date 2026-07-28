@@ -1,0 +1,61 @@
+name: Test fail-on-diff with no changes (should pass)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml and pre-generate schema
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/nodiff-chart"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/nodiff-chart/values.yaml" <<'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - name: Generate schema first time (to create the baseline)
+        id: first-run
+        uses: .
+        with:
+          values: tests/fixtures/nodiff-chart/values.yaml
+          output: tests/fixtures/nodiff-chart/values.schema.json
+          draft: 2020
+
+      - name: Commit the generated schema so git sees no diff on second run
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add tests/fixtures/nodiff-chart/values.schema.json
+          git commit -m "add baseline schema for nodiff test" || echo "nothing to commit"
+
+      - name: Run action again with fail-on-diff (should NOT fail since schema is up to date)
+        id: action
+        uses: .
+        with:
+          values: tests/fixtures/nodiff-chart/values.yaml
+          output: tests/fixtures/nodiff-chart/values.schema.json
+          draft: 2020
+          fail-on-diff: 'false'
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"
+
+      - name: Assert schema file still exists
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/nodiff-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json does not exist"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"

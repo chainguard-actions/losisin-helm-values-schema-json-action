@@ -1,6 +1,11 @@
 {
   "owner": "losisin",
   "repo": "helm-values-schema-json-action",
-  "version": "",
-  "url": "https://github.com/losisin/helm-values-schema-json-action"
+  "version": "v3.1.0",
+  "commit_sha": "9f555986124362af978a9861cf0f81e1956300ad",
+  "url": "https://github.com/losisin/helm-values-schema-json-action",
+  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "2",
+  "harden_agent_version": "2"
 }

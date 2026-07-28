@@ -1,0 +1,84 @@
+name: Test custom options (draft, indent, title, description)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a simple values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/custom-chart"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/values.yaml" <<'EOF'
+          replicaCount: 1
+          enabled: true
+          name: myapp
+          replicas: 3
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/custom-chart/values.yaml
+          output: tests/fixtures/custom-chart/custom.schema.json
+          draft: 7
+          indent: 2
+          title: My Custom Schema
+          description: Schema for my custom chart
+
+      - name: Assert schema file was created at custom path
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/custom.schema.json" ]; then
+            echo "FAIL: custom.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: custom.schema.json exists"
+
+      - name: Assert schema contains draft 7
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/custom.schema.json")
+          echo "schema: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"http://json-schema.org/draft-07/schema#"'; then
+            echo "FAIL: schema does not contain draft-07"
+            exit 1
+          fi
+          echo "PASS: schema contains draft-07"
+
+      - name: Assert schema contains title
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/custom.schema.json")
+          if ! echo "$SCHEMA" | grep -q '"title"'; then
+            echo "FAIL: schema does not contain title"
+            exit 1
+          fi
+          echo "PASS: schema contains title"
+
+      - name: Assert schema contains description
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/custom.schema.json")
+          if ! echo "$SCHEMA" | grep -q '"description"'; then
+            echo "FAIL: schema does not contain description"
+            exit 1
+          fi
+          echo "PASS: schema contains description"
+
+      - name: Assert indent is 2 spaces
+        run: |
+          # Check that the file uses 2-space indentation (lines starting with exactly 2 spaces)
+          if ! grep -qP '^ {2}"' "$GITHUB_WORKSPACE/tests/fixtures/custom-chart/custom.schema.json"; then
+            echo "FAIL: schema does not appear to use 2-space indentation"
+            exit 1
+          fi
+          echo "PASS: schema uses 2-space indentation"
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"

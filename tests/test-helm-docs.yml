@@ -1,0 +1,66 @@
+name: Test useHelmDocs option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml with helm-docs comments for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/helmdocs-chart"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/helmdocs-chart/values.yaml" <<'EOF'
+          # -- Number of replicas to deploy
+          replicaCount: 1
+          image:
+            # -- Docker image repository
+            repository: nginx
+            # -- Docker image tag
+            tag: latest
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/helmdocs-chart/values.yaml
+          output: tests/fixtures/helmdocs-chart/values.schema.json
+          draft: 2020
+          useHelmDocs: 'true'
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/helmdocs-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/tests/fixtures/helmdocs-chart/values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: values.schema.json is valid JSON"
+
+      - name: Assert schema contains description from helm-docs comment
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/helmdocs-chart/values.schema.json")
+          echo "schema: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"description"'; then
+            echo "FAIL: schema does not contain any description field"
+            exit 1
+          fi
+          echo "PASS: schema contains description field (from helm-docs comments)"
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"

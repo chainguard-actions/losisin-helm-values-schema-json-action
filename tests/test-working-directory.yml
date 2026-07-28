@@ -1,0 +1,67 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create chart directory with values.yaml
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/workdir-chart"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/workdir-chart/values.yaml" <<'EOF'
+          appName: myapp
+          replicas: 2
+          port: 8080
+          debug: false
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/workdir-chart
+          draft: 2020
+          indent: 4
+
+      - name: Assert schema file was created in working directory
+        run: |
+          # Default output is values.schema.json in the working directory
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/workdir-chart/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not created in working directory"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists in working directory"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/tests/fixtures/workdir-chart/values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: values.schema.json is valid JSON"
+
+      - name: Assert schema contains expected properties
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/tests/fixtures/workdir-chart/values.schema.json")
+          echo "schema: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"appName"'; then
+            echo "FAIL: schema does not contain appName property"
+            exit 1
+          fi
+          if ! echo "$SCHEMA" | grep -q '"replicas"'; then
+            echo "FAIL: schema does not contain replicas property"
+            exit 1
+          fi
+          echo "PASS: schema contains expected properties"
+
+      - name: Assert plugin-path output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "actual plugin-path: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to $ACTUAL"

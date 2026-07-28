@@ -13,6 +13,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v2.5.0 | [`v2.5.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.5.0) | [`02bda41`](https://github.com/losisin/helm-values-schema-json-action/commit/02bda41b469ccfb3f0abb35f4211e598b0b6ea3e) |
 | v3.0.0 | [`v3.0.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.0) | [`39cdf80`](https://github.com/losisin/helm-values-schema-json-action/commit/39cdf80504f6c95ad3c4f317e2135e2509ea56bb) |
 | v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.1) | [`cfefdf4`](https://github.com/losisin/helm-values-schema-json-action/commit/cfefdf4241da6dbe17f3378e3cd0e863d4a4c3c8) |
+| v3.1.0 | [`v3.1.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.1.0) | [`9f55598`](https://github.com/losisin/helm-values-schema-json-action/commit/9f555986124362af978a9861cf0f81e1956300ad) |
 
 ## Privacy
 

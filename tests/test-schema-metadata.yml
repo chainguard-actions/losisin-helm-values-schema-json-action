@@ -1,0 +1,64 @@
+name: Test schema root metadata
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-meta-test"
+          cat > "$GITHUB_WORKSPACE/helm-meta-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-meta-test/values.yaml
+          output: helm-meta-test/values.schema.json
+          draft: 2020
+          id: https://example.com/my-schema
+          title: My Helm Chart Schema
+          description: Schema for my Helm chart values
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema contains title
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('title') == 'My Helm Chart Schema', f'Expected title, got: {d.get(\"title\")}'"; then
+            echo "FAIL: schema title not set correctly"
+            exit 1
+          fi
+          echo "PASS: schema title is correct"
+
+      - name: Assert schema contains description
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json")
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('description') == 'Schema for my Helm chart values', f'Expected description, got: {d.get(\"description\")}'"; then
+            echo "FAIL: schema description not set correctly"
+            exit 1
+          fi
+          echo "PASS: schema description is correct"
+
+      - name: Assert schema contains id
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json")
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); schema_id=d.get('\$id',''); assert 'example.com' in schema_id, f'Expected id with example.com, got: {schema_id}'"; then
+            echo "FAIL: schema id not set correctly"
+            exit 1
+          fi
+          echo "PASS: schema id is correct"

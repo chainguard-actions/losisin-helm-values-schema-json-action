@@ -1,0 +1,74 @@
+name: Test ref (URI reference) option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-ref-test"
+          cat > "$GITHUB_WORKSPACE/helm-ref-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-ref-test/values.yaml
+          output: helm-ref-test/values.schema.json
+          draft: 2020
+          indent: 4
+          ref: https://example.com/schemas/my-chart-ref
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-ref-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+          cat "$GITHUB_WORKSPACE/helm-ref-test/values.schema.json"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/helm-ref-test/values.schema.json'))"; then
+            echo "FAIL: generated schema is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains ref
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-ref-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          # ref may appear as \$ref or as a top-level key; check the raw content
+          content = json.dumps(d)
+          assert 'example.com' in content or 'my-chart-ref' in content, f'Expected ref URI in schema, got: {content}'
+          "; then
+            echo "FAIL: ref URI not found in schema"
+            exit 1
+          fi
+          echo "PASS: schema contains ref URI"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

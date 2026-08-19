@@ -7,9 +7,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create values.yaml
+      - name: Create values.yaml for testing
         run: |
-          cat > /tmp/values.yaml << 'EOF'
+          mkdir -p "$GITHUB_WORKSPACE/helm-test"
+          cat > "$GITHUB_WORKSPACE/helm-test/values.yaml" << 'EOF'
           replicaCount: 1
           image:
             repository: nginx
@@ -22,32 +23,45 @@ jobs:
       - id: action
         uses: .
         with:
-          values: /tmp/values.yaml
-          output: /tmp/values.schema.json
-          draft: 7
+          values: helm-test/values.yaml
+          output: helm-test/values.schema.json
+          draft: 2020
+          indent: 4
 
-      - name: Assert schema file was created
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
         run: |
-          if [ ! -f /tmp/values.schema.json ]; then
-            echo "FAIL: expected /tmp/values.schema.json to exist"
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
             exit 1
           fi
-          echo "PASS: schema file exists"
+          echo "PASS: plugin-path is set to $PLUGIN_PATH"
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+          cat "$GITHUB_WORKSPACE/helm-test/values.schema.json"
 
       - name: Assert schema is valid JSON
         run: |
-          if ! python3 -c "import json, sys; json.load(open('/tmp/values.schema.json'))"; then
-            echo "FAIL: schema file is not valid JSON"
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/helm-test/values.schema.json'))"; then
+            echo "FAIL: generated schema is not valid JSON"
             exit 1
           fi
           echo "PASS: schema is valid JSON"
 
       - name: Assert schema contains expected fields
         run: |
-          SCHEMA=$(cat /tmp/values.schema.json)
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-test/values.schema.json")
           echo "Schema content: $SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'properties' in s or '\$schema' in s, 'missing expected keys'"; then
-            echo "FAIL: schema missing expected structure"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'replicaCount' in d.get('properties', {}), 'replicaCount not found'"; then
+            echo "FAIL: replicaCount not found in schema properties"
             exit 1
           fi
-          echo "PASS: schema has expected structure"
+          echo "PASS: schema contains expected properties"

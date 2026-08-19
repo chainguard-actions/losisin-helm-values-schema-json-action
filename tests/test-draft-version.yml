@@ -7,61 +7,52 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create values.yaml
+      - name: Create values.yaml for testing
         run: |
-          cat > /tmp/values.yaml << 'EOF'
+          mkdir -p "$GITHUB_WORKSPACE/helm-draft-test"
+          cat > "$GITHUB_WORKSPACE/helm-draft-test/values.yaml" << 'EOF'
           replicaCount: 1
           image:
             repository: nginx
             tag: latest
+          service:
+            type: ClusterIP
+            port: 80
           EOF
 
-      - id: action-draft-2020
+      - id: action
         uses: .
         with:
-          values: /tmp/values.yaml
-          output: /tmp/values-draft2020.schema.json
-          draft: 2020
+          values: helm-draft-test/values.yaml
+          output: helm-draft-test/values.schema.json
+          draft: 7
+          indent: 2
 
-      - name: Assert draft 2020 schema file was created
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
         run: |
-          if [ ! -f /tmp/values-draft2020.schema.json ]; then
-            echo "FAIL: expected /tmp/values-draft2020.schema.json to exist"
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
             exit 1
           fi
-          echo "PASS: draft 2020 schema file exists"
+          echo "PASS: plugin-path is set"
 
-      - name: Assert draft 2020 schema contains correct schema URI
+      - name: Assert schema file was generated
         run: |
-          SCHEMA=$(cat /tmp/values-draft2020.schema.json)
-          echo "Schema content: $SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert '2020' in s.get('\$schema',''), f'expected 2020 in schema URI, got: {s.get(\"\$schema\",\"\")}'"; then
-            echo "FAIL: schema does not reference draft 2020"
+          if [ ! -f "$GITHUB_WORKSPACE/helm-draft-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
             exit 1
           fi
-          echo "PASS: schema references draft 2020"
+          echo "PASS: values.schema.json exists"
 
-      - id: action-draft-4
-        uses: .
-        with:
-          values: /tmp/values.yaml
-          output: /tmp/values-draft4.schema.json
-          draft: 4
-
-      - name: Assert draft 4 schema file was created
+      - name: Assert schema uses draft-07
         run: |
-          if [ ! -f /tmp/values-draft4.schema.json ]; then
-            echo "FAIL: expected /tmp/values-draft4.schema.json to exist"
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-draft-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); schema=d.get('\$schema',''); assert 'draft-07' in schema or 'draft/07' in schema, f'Expected draft-07 in schema, got: {schema}'"; then
+            echo "FAIL: schema does not reference draft-07"
             exit 1
           fi
-          echo "PASS: draft 4 schema file exists"
-
-      - name: Assert draft 4 schema contains correct schema URI
-        run: |
-          SCHEMA=$(cat /tmp/values-draft4.schema.json)
-          echo "Schema content: $SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'draft-04' in s.get('\$schema','') or '04' in s.get('\$schema',''), f'expected draft-04 in schema URI, got: {s.get(\"\$schema\",\"\")}'"; then
-            echo "FAIL: schema does not reference draft 4"
-            exit 1
-          fi
-          echo "PASS: schema references draft 4"
+          echo "PASS: schema uses draft-07"

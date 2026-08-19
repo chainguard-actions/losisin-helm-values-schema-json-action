@@ -1,0 +1,84 @@
+name: Test indent option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-indent-test"
+          cat > "$GITHUB_WORKSPACE/helm-indent-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action-2-spaces
+        uses: .
+        with:
+          values: helm-indent-test/values.yaml
+          output: helm-indent-test/values.schema.2.json
+          draft: 2020
+          indent: 2
+
+      - id: action-4-spaces
+        uses: .
+        with:
+          values: helm-indent-test/values.yaml
+          output: helm-indent-test/values.schema.4.json
+          draft: 2020
+          indent: 4
+
+      - name: Assert both schema files were generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-indent-test/values.schema.2.json" ]; then
+            echo "FAIL: values.schema.2.json was not generated"
+            exit 1
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/helm-indent-test/values.schema.4.json" ]; then
+            echo "FAIL: values.schema.4.json was not generated"
+            exit 1
+          fi
+          echo "PASS: both schema files exist"
+
+      - name: Assert schemas are valid JSON
+        run: |
+          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/helm-indent-test/values.schema.2.json'))"; then
+            echo "FAIL: 2-space schema is not valid JSON"
+            exit 1
+          fi
+          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/helm-indent-test/values.schema.4.json'))"; then
+            echo "FAIL: 4-space schema is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: both schemas are valid JSON"
+
+      - name: Assert indentation differs between files
+        run: |
+          SCHEMA_2=$(cat "$GITHUB_WORKSPACE/helm-indent-test/values.schema.2.json")
+          SCHEMA_4=$(cat "$GITHUB_WORKSPACE/helm-indent-test/values.schema.4.json")
+          echo "2-space schema (first 200 chars): ${SCHEMA_2:0:200}"
+          echo "4-space schema (first 200 chars): ${SCHEMA_4:0:200}"
+          SIZE_2=$(wc -c < "$GITHUB_WORKSPACE/helm-indent-test/values.schema.2.json")
+          SIZE_4=$(wc -c < "$GITHUB_WORKSPACE/helm-indent-test/values.schema.4.json")
+          echo "2-space size: $SIZE_2, 4-space size: $SIZE_4"
+          if [ "$SIZE_4" -le "$SIZE_2" ]; then
+            echo "FAIL: 4-space schema should be larger than 2-space schema"
+            exit 1
+          fi
+          echo "PASS: indentation difference confirmed (4-space > 2-space)"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action-4-spaces.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

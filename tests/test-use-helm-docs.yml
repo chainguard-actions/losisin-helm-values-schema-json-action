@@ -1,0 +1,80 @@
+name: Test useHelmDocs option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml with helm-docs comments
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-helmdocs-test"
+          cat > "$GITHUB_WORKSPACE/helm-helmdocs-test/values.yaml" << 'EOF'
+          # -- Number of replicas to deploy
+          replicaCount: 1
+          image:
+            # -- Docker image repository
+            repository: nginx
+            # -- Docker image tag
+            tag: latest
+          service:
+            # -- Kubernetes service type
+            type: ClusterIP
+            # -- Service port number
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-helmdocs-test/values.yaml
+          output: helm-helmdocs-test/values.schema.json
+          draft: 2020
+          indent: 4
+          useHelmDocs: true
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-helmdocs-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+          cat "$GITHUB_WORKSPACE/helm-helmdocs-test/values.schema.json"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json, sys; json.load(open('$GITHUB_WORKSPACE/helm-helmdocs-test/values.schema.json'))"; then
+            echo "FAIL: generated schema is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains helm-docs descriptions
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-helmdocs-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          props = d.get('properties', {})
+          rc_desc = props.get('replicaCount', {}).get('description', '')
+          assert rc_desc, f'Expected description for replicaCount from helm-docs, got empty'
+          print(f'replicaCount description: {rc_desc}')
+          "; then
+            echo "FAIL: helm-docs descriptions not found in schema"
+            exit 1
+          fi
+          echo "PASS: schema contains helm-docs descriptions"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

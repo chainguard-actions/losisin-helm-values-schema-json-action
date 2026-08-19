@@ -1,0 +1,68 @@
+name: Test fail-on-diff with no changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up git user
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-nodiff-test"
+          cat > "$GITHUB_WORKSPACE/helm-nodiff-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      # First run: generate the schema
+      - id: first-run
+        uses: .
+        with:
+          values: helm-nodiff-test/values.yaml
+          output: helm-nodiff-test/values.schema.json
+          draft: 2020
+          indent: 4
+
+      - name: Assert first schema was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-nodiff-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated on first run"
+            exit 1
+          fi
+          echo "PASS: first schema generated"
+          echo "Schema content:"
+          cat "$GITHUB_WORKSPACE/helm-nodiff-test/values.schema.json"
+
+      - name: Commit the generated schema so second run sees no diff
+        run: |
+          git add "$GITHUB_WORKSPACE/helm-nodiff-test/values.schema.json"
+          git commit -m "add initial schema for test"
+
+      # Second run: schema should be identical, fail-on-diff should NOT fail
+      - id: second-run
+        uses: .
+        with:
+          values: helm-nodiff-test/values.yaml
+          output: helm-nodiff-test/values.schema.json
+          draft: 2020
+          indent: 4
+          fail-on-diff: false
+
+      - name: Assert plugin-path output is set on second run
+        env:
+          PLUGIN_PATH: ${{ steps.second-run.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty on second run"
+            exit 1
+          fi
+          echo "PASS: second run completed successfully"

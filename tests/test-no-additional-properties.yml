@@ -1,0 +1,77 @@
+name: Test noAdditionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-noadd-test"
+          cat > "$GITHUB_WORKSPACE/helm-noadd-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-noadd-test/values.yaml
+          output: helm-noadd-test/values.schema.json
+          draft: 2020
+          indent: 4
+          noAdditionalProperties: true
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+          cat "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json"
+
+      - name: Assert schema has additionalProperties false at root
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          ap = d.get('additionalProperties')
+          assert ap == False, f'Expected root additionalProperties=false, got: {ap}'
+          "; then
+            echo "FAIL: root additionalProperties not set to false"
+            exit 1
+          fi
+          echo "PASS: root additionalProperties is false"
+
+      - name: Assert schema has additionalProperties false on child object
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-noadd-test/values.schema.json")
+          if ! echo "$SCHEMA" | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          service_props = d.get('properties', {}).get('service', {})
+          ap = service_props.get('additionalProperties')
+          assert ap == False, f'Expected service additionalProperties=false, got: {ap}'
+          "; then
+            echo "FAIL: child object additionalProperties not set to false"
+            exit 1
+          fi
+          echo "PASS: child object additionalProperties is false"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

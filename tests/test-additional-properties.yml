@@ -1,0 +1,56 @@
+name: Test additionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml for testing
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/helm-addprops-test"
+          cat > "$GITHUB_WORKSPACE/helm-addprops-test/values.yaml" << 'EOF'
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: helm-addprops-test/values.yaml
+          output: helm-addprops-test/values.schema.json
+          draft: 2020
+          indent: 4
+          additionalProperties: false
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/helm-addprops-test/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema has additionalProperties set to false
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-addprops-test/values.schema.json")
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; d=json.load(sys.stdin); ap=d.get('additionalProperties'); assert ap == False, f'Expected additionalProperties=false, got: {ap}'"; then
+            echo "FAIL: additionalProperties not set to false in schema"
+            exit 1
+          fi
+          echo "PASS: additionalProperties is false in schema"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

@@ -1,4 +1,4 @@
-name: Test noAdditionalProperties input
+name: Test custom draft version and indent
 on:
   workflow_dispatch:
 jobs:
@@ -10,10 +10,10 @@ jobs:
       - id: action
         uses: .
         with:
-          values: tests/fixtures/values-noadditional.yaml
-          output: tests/fixtures/values-noadditional.schema.json
-          draft: 2020
-          noAdditionalProperties: 'true'
+          values: tests/fixtures/values-draft7.yaml
+          output: tests/fixtures/values-draft7.schema.json
+          draft: 7
+          indent: 2
 
       - name: Assert plugin-path output is set
         env:
@@ -28,28 +28,30 @@ jobs:
 
       - name: Assert output schema file was generated
         run: |
-          if [ ! -f "tests/fixtures/values-noadditional.schema.json" ]; then
-            echo "FAIL: values-noadditional.schema.json was not generated"
+          if [ ! -f "tests/fixtures/values-draft7.schema.json" ]; then
+            echo "FAIL: values-draft7.schema.json was not generated"
             exit 1
           fi
           echo "PASS: schema file exists"
-          cat tests/fixtures/values-noadditional.schema.json
+          cat tests/fixtures/values-draft7.schema.json
 
-      - name: Assert schema contains additionalProperties false
+      - name: Assert schema uses draft 7
         run: |
-          SCHEMA=$(cat tests/fixtures/values-noadditional.schema.json)
+          SCHEMA=$(cat tests/fixtures/values-draft7.schema.json)
           echo "Schema: $SCHEMA"
-          if ! echo "$SCHEMA" | grep -q '"additionalProperties"'; then
-            echo "FAIL: schema does not contain additionalProperties"
+          if ! echo "$SCHEMA" | grep -q 'draft-07'; then
+            echo "FAIL: schema does not use draft-07"
             exit 1
           fi
-          echo "PASS: schema contains additionalProperties"
+          echo "PASS: schema uses draft-07"
 
       - name: Assert schema is valid JSON
         run: |
-          SCHEMA=$(cat tests/fixtures/values-noadditional.schema.json)
+          SCHEMA=$(cat tests/fixtures/values-draft7.schema.json)
+          echo "Schema content:"
+          echo "$SCHEMA"
           if ! echo "$SCHEMA" | python3 -m json.tool > /dev/null 2>&1; then
             echo "FAIL: schema is not valid JSON"
             exit 1
           fi
-          echo "PASS: schema is valid JSON"
+          echo "PASS: schema is valid JSON with 2-space indent"

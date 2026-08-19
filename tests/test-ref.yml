@@ -1,4 +1,4 @@
-name: Test noAdditionalProperties input
+name: Test ref input (URI reference of the schema)
 on:
   workflow_dispatch:
 jobs:
@@ -10,10 +10,10 @@ jobs:
       - id: action
         uses: .
         with:
-          values: tests/fixtures/values-noadditional.yaml
-          output: tests/fixtures/values-noadditional.schema.json
+          values: tests/fixtures/values-ref.yaml
+          output: tests/fixtures/values-ref.schema.json
           draft: 2020
-          noAdditionalProperties: 'true'
+          ref: 'https://example.com/base-schema.json'
 
       - name: Assert plugin-path output is set
         env:
@@ -28,28 +28,28 @@ jobs:
 
       - name: Assert output schema file was generated
         run: |
-          if [ ! -f "tests/fixtures/values-noadditional.schema.json" ]; then
-            echo "FAIL: values-noadditional.schema.json was not generated"
+          if [ ! -f "tests/fixtures/values-ref.schema.json" ]; then
+            echo "FAIL: values-ref.schema.json was not generated"
             exit 1
           fi
           echo "PASS: schema file exists"
-          cat tests/fixtures/values-noadditional.schema.json
-
-      - name: Assert schema contains additionalProperties false
-        run: |
-          SCHEMA=$(cat tests/fixtures/values-noadditional.schema.json)
-          echo "Schema: $SCHEMA"
-          if ! echo "$SCHEMA" | grep -q '"additionalProperties"'; then
-            echo "FAIL: schema does not contain additionalProperties"
-            exit 1
-          fi
-          echo "PASS: schema contains additionalProperties"
+          cat tests/fixtures/values-ref.schema.json
 
       - name: Assert schema is valid JSON
         run: |
-          SCHEMA=$(cat tests/fixtures/values-noadditional.schema.json)
+          SCHEMA=$(cat tests/fixtures/values-ref.schema.json)
           if ! echo "$SCHEMA" | python3 -m json.tool > /dev/null 2>&1; then
             echo "FAIL: schema is not valid JSON"
             exit 1
           fi
           echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains ref URI
+        run: |
+          SCHEMA=$(cat tests/fixtures/values-ref.schema.json)
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q 'https://example.com/base-schema.json'; then
+            echo "FAIL: schema does not contain the expected ref URI"
+            exit 1
+          fi
+          echo "PASS: schema contains expected ref URI"

@@ -1,0 +1,13 @@
+# -- Number of replicas to deploy
+replicaCount: 1
+# -- Container image configuration
+image:
+  # -- Image repository
+  repository: nginx
+  # -- Image tag
+  tag: latest
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 80

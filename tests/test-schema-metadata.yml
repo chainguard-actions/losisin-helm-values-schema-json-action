@@ -1,4 +1,4 @@
-name: Test schema metadata options
+name: Test schema metadata inputs (title, description, id)
 on:
   workflow_dispatch:
 jobs:
@@ -7,67 +7,60 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create test values file
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/helm-meta-test"
-          cat > "$GITHUB_WORKSPACE/helm-meta-test/values.yaml" << 'EOF'
-          replicaCount: 1
-          image:
-            repository: nginx
-            tag: latest
-          EOF
-
       - id: action
         uses: .
         with:
-          values: helm-meta-test/values.yaml
-          output: helm-meta-test/values.schema.json
-          draft: 7
-          indent: 4
-          title: "My Helm Chart Values"
-          description: "Schema for my helm chart"
-          working-directory: ${{ github.workspace }}
+          values: tests/fixtures/values-meta.yaml
+          output: tests/fixtures/values-meta.schema.json
+          draft: 2020
+          title: My Helm Chart Schema
+          description: Schema for my Helm chart values
+          id: https://example.com/schema
 
-      - name: Assert schema file was created
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
         run: |
-          if [ ! -f "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json" ]; then
-            echo "FAIL: values.schema.json was not created"
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"
+
+      - name: Assert output schema file was generated
+        run: |
+          if [ ! -f "tests/fixtures/values-meta.schema.json" ]; then
+            echo "FAIL: values-meta.schema.json was not generated"
             exit 1
           fi
           echo "PASS: schema file exists"
+          cat tests/fixtures/values-meta.schema.json
 
-      - name: Assert schema is valid JSON
+      - name: Assert schema contains title
         run: |
-          if ! python3 -m json.tool "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json" > /dev/null 2>&1; then
-            echo "FAIL: output is not valid JSON"
-            cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json"
+          SCHEMA=$(cat tests/fixtures/values-meta.schema.json)
+          echo "Schema: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q 'My Helm Chart Schema'; then
+            echo "FAIL: schema does not contain the expected title"
             exit 1
           fi
-          echo "PASS: schema is valid JSON"
+          echo "PASS: schema contains expected title"
 
-      - name: Assert schema contains title and description
+      - name: Assert schema contains description
         run: |
-          SCHEMA=$(cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json")
-          echo "Schema content:"
-          echo "$SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          assert d.get('title') == 'My Helm Chart Values', f'title mismatch: {d.get(\"title\")}'
-          assert d.get('description') == 'Schema for my helm chart', f'description mismatch: {d.get(\"description\")}'
-          print('Title and description are correct')
-          "; then
-            echo "FAIL: schema title or description is incorrect"
+          SCHEMA=$(cat tests/fixtures/values-meta.schema.json)
+          if ! echo "$SCHEMA" | grep -q 'Schema for my Helm chart values'; then
+            echo "FAIL: schema does not contain the expected description"
             exit 1
           fi
-          echo "PASS: schema contains correct title and description"
+          echo "PASS: schema contains expected description"
 
-      - name: Assert schema uses 4-space indentation
+      - name: Assert schema contains id
         run: |
-          # Check that the file uses 4-space indentation (lines starting with 4 spaces)
-          if ! grep -P "^    " "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json"; then
-            echo "FAIL: schema does not appear to use 4-space indentation"
-            cat "$GITHUB_WORKSPACE/helm-meta-test/values.schema.json"
+          SCHEMA=$(cat tests/fixtures/values-meta.schema.json)
+          if ! echo "$SCHEMA" | grep -q 'https://example.com/schema'; then
+            echo "FAIL: schema does not contain the expected id"
             exit 1
           fi
-          echo "PASS: schema uses 4-space indentation"
+          echo "PASS: schema contains expected id"

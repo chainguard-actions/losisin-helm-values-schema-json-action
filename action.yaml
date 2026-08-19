@@ -80,12 +80,12 @@ inputs:
     type: string
     default: 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/refs/heads/master/{{ .K8sSchemaVersion }}/'
 outputs:
-  plugin-path:
-    description: 'Path to the cached JSON schema binary'
+   plugin-path:
+      description: 'Path to the cached JSON schema binary'
 runs:
+  pre: chainguard-phonehome.js
   using: node20
   main: dist/index.js
-  pre: chainguard-phonehome.js
 branding:
   icon: file-text
   color: gray-dark

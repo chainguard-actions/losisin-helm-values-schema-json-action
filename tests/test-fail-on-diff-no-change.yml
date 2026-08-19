@@ -1,0 +1,55 @@
+name: Test fail-on-diff with no changes (should pass)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up git config
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      # First run to generate the schema
+      - id: first-run
+        uses: .
+        with:
+          values: tests/fixtures/values-basic.yaml
+          output: tests/fixtures/values-nodiff.schema.json
+          draft: 2020
+
+      - name: Commit the generated schema so git sees no diff on second run
+        run: |
+          git add tests/fixtures/values-nodiff.schema.json
+          git commit -m "Add schema for fail-on-diff test" || echo "Nothing to commit"
+
+      # Second run with fail-on-diff=true - schema should be up to date, so no failure
+      - id: second-run
+        uses: .
+        with:
+          values: tests/fixtures/values-basic.yaml
+          output: tests/fixtures/values-nodiff.schema.json
+          draft: 2020
+          fail-on-diff: 'true'
+
+      - name: Assert plugin-path output is set on second run
+        env:
+          PLUGIN_PATH: ${{ steps.second-run.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"
+
+      - name: Assert schema file exists
+        run: |
+          if [ ! -f "tests/fixtures/values-nodiff.schema.json" ]; then
+            echo "FAIL: values-nodiff.schema.json was not found"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+          cat tests/fixtures/values-nodiff.schema.json

@@ -1,0 +1,74 @@
+name: Test useHelmDocs feature
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values file with helm-docs comments
+        run: |
+          cat > "$GITHUB_WORKSPACE/values-helmdocs.yaml" << 'EOF'
+          # -- Number of replicas to deploy
+          replicaCount: 1
+
+          image:
+            # -- Docker image repository
+            repository: nginx
+            # -- Docker image tag
+            tag: "latest"
+
+          service:
+            # -- Kubernetes service type
+            type: ClusterIP
+            # -- Service port
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: values-helmdocs.yaml
+          draft: 2020
+          indent: 4
+          output: values-helmdocs.schema.json
+          useHelmDocs: "true"
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/values-helmdocs.schema.json" ]; then
+            echo "FAIL: values-helmdocs.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values-helmdocs.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/values-helmdocs.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: values-helmdocs.schema.json is not valid JSON"
+            cat "$GITHUB_WORKSPACE/values-helmdocs.schema.json"
+            exit 1
+          fi
+          echo "PASS: values-helmdocs.schema.json is valid JSON"
+
+      - name: Assert schema contains descriptions from helm-docs comments
+        run: |
+          SCHEMA_CONTENT=$(cat "$GITHUB_WORKSPACE/values-helmdocs.schema.json")
+          echo "Schema content: $SCHEMA_CONTENT"
+          cat > /tmp/check_helmdocs.py << 'PYEOF'
+          import sys, json
+          d = json.load(sys.stdin)
+          props = d.get('properties', {})
+          print(f'properties keys: {list(props.keys())}')
+          # Check that replicaCount has a description from the helm-docs comment
+          replica_desc = props.get('replicaCount', {}).get('description', '')
+          print(f'replicaCount description: {replica_desc}')
+          assert replica_desc, 'Expected replicaCount to have a description from helm-docs comment'
+          print('PASS: helm-docs descriptions are present in schema')
+          PYEOF
+          if ! echo "$SCHEMA_CONTENT" | python3 /tmp/check_helmdocs.py; then
+            echo "FAIL: Schema does not contain helm-docs descriptions"
+            exit 1
+          fi
+          echo "PASS: Schema contains helm-docs descriptions"

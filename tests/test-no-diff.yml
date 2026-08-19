@@ -1,0 +1,49 @@
+name: Test no-diff scenario (schema already up to date)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Copy fixture values file to workspace
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/values.yaml" "$GITHUB_WORKSPACE/values.yaml"
+
+      - name: Generate initial schema
+        id: first-run
+        uses: .
+        with:
+          values: values.yaml
+          draft: 2020
+          indent: 4
+          output: values.schema.json
+
+      - name: Stage the generated schema so git tracks it
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add values.schema.json
+          git commit -m "add generated schema"
+
+      - name: Run action again with fail-on-diff (should not fail since schema is up to date)
+        id: second-run
+        uses: .
+        with:
+          values: values.yaml
+          draft: 2020
+          indent: 4
+          output: values.schema.json
+          fail-on-diff: "true"
+
+      - name: Assert second run succeeded (no diff)
+        env:
+          OUTCOME: ${{ steps.second-run.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: Expected action to succeed (no diff), but outcome was: $OUTCOME"
+            exit 1
+          fi
+          echo "PASS: Action correctly succeeded with no diff"

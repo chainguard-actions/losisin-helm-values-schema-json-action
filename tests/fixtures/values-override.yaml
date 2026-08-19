@@ -1,0 +1,15 @@
+# Override values for testing multiple values files
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

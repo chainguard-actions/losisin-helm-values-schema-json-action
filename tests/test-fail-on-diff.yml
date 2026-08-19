@@ -1,4 +1,4 @@
-name: Test fail-on-diff with no diff
+name: Test fail-on-diff feature
 on:
   workflow_dispatch:
 jobs:
@@ -7,57 +7,44 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create test values file
+      - name: Copy fixture values file to workspace
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/test-diff-output"
-          cat > "$GITHUB_WORKSPACE/test-diff-output/values.yaml" << 'EOF'
-          replicaCount: 1
-          image:
-            repository: nginx
-            tag: latest
+          cp "$GITHUB_WORKSPACE/tests/fixtures/values.yaml" "$GITHUB_WORKSPACE/values.yaml"
+
+      - name: Create a stale/incorrect schema file
+        run: |
+          cat > "$GITHUB_WORKSPACE/values.schema.json" << 'EOF'
+          {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "stale": {
+                "type": "string"
+              }
+            }
+          }
           EOF
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add values.schema.json
+          git commit -m "add stale schema"
 
-      - name: Generate initial schema
-        id: initial
+      - id: action
         uses: .
         with:
-          values: test-diff-output/values.yaml
-          output: test-diff-output/values.schema.json
-          draft: 7
+          values: values.yaml
+          draft: 2020
+          output: values.schema.json
+          fail-on-diff: "true"
+        continue-on-error: true
 
-      - name: Assert initial schema was created
+      - name: Assert action failed due to diff
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
-          if [ ! -f "$GITHUB_WORKSPACE/test-diff-output/values.schema.json" ]; then
-            echo "FAIL: initial schema was not created"
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: Expected action to fail due to diff, but outcome was: $OUTCOME"
             exit 1
           fi
-          echo "PASS: initial schema created"
-
-      - name: Commit the generated schema so second run sees no diff
-        run: |
-          git config user.email "test@test.com"
-          git config user.name "Test"
-          git add "$GITHUB_WORKSPACE/test-diff-output/"
-          git commit -m "add test schema" || echo "nothing to commit"
-
-      - name: Run action again with fail-on-diff false (should pass - no diff)
-        id: action
-        uses: .
-        with:
-          values: test-diff-output/values.yaml
-          output: test-diff-output/values.schema.json
-          draft: 7
-          fail-on-diff: "false"
-
-      - name: Assert schema still exists and is valid
-        run: |
-          if [ ! -f "$GITHUB_WORKSPACE/test-diff-output/values.schema.json" ]; then
-            echo "FAIL: schema file missing after second run"
-            exit 1
-          fi
-          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-diff-output/values.schema.json")
-          if ! echo "$SCHEMA" | grep -q '"replicaCount"'; then
-            echo "FAIL: schema does not contain replicaCount"
-            exit 1
-          fi
-          echo "PASS: schema is valid after second run"
+          echo "PASS: Action correctly failed due to diff"

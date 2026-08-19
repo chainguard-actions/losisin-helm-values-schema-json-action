@@ -1,0 +1,102 @@
+name: Test custom output and draft version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Copy fixture values file to workspace
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/values.yaml" "$GITHUB_WORKSPACE/values.yaml"
+
+      - id: action
+        uses: .
+        with:
+          values: values.yaml
+          draft: 7
+          indent: 2
+          output: custom-schema.json
+          title: "My Helm Chart Schema"
+          description: "Schema for my Helm chart values"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"
+
+      - name: Assert custom schema file was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/custom-schema.json" ]; then
+            echo "FAIL: custom-schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: custom-schema.json exists"
+
+      - name: Assert schema file is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/custom-schema.json" > /dev/null 2>&1; then
+            echo "FAIL: custom-schema.json is not valid JSON"
+            cat "$GITHUB_WORKSPACE/custom-schema.json"
+            exit 1
+          fi
+          echo "PASS: custom-schema.json is valid JSON"
+
+      - name: Assert schema contains draft 7
+        run: |
+          SCHEMA_CONTENT=$(cat "$GITHUB_WORKSPACE/custom-schema.json")
+          echo "Schema content: $SCHEMA_CONTENT"
+          cat > /tmp/check_draft7.py << 'PYEOF'
+          import sys, json
+          d = json.load(sys.stdin)
+          schema_val = d.get('$schema', '')
+          print(f'$schema: {schema_val}')
+          assert 'draft-07' in schema_val or '07' in schema_val, f'Expected draft-07 in schema, got: {schema_val}'
+          print('PASS')
+          PYEOF
+          if ! echo "$SCHEMA_CONTENT" | python3 /tmp/check_draft7.py; then
+            echo "FAIL: Schema does not contain draft 7"
+            exit 1
+          fi
+          echo "PASS: Schema contains draft 7"
+
+      - name: Assert schema has title
+        run: |
+          SCHEMA_CONTENT=$(cat "$GITHUB_WORKSPACE/custom-schema.json")
+          cat > /tmp/check_title.py << 'PYEOF'
+          import sys, json
+          d = json.load(sys.stdin)
+          title = d.get('title', '')
+          print(f'title: {title}')
+          assert title == 'My Helm Chart Schema', f'Expected title "My Helm Chart Schema", got: {title}'
+          print('PASS')
+          PYEOF
+          if ! echo "$SCHEMA_CONTENT" | python3 /tmp/check_title.py; then
+            echo "FAIL: Schema does not have expected title"
+            exit 1
+          fi
+          echo "PASS: Schema has expected title"
+
+      - name: Assert schema has description
+        run: |
+          SCHEMA_CONTENT=$(cat "$GITHUB_WORKSPACE/custom-schema.json")
+          cat > /tmp/check_desc.py << 'PYEOF'
+          import sys, json
+          d = json.load(sys.stdin)
+          desc = d.get('description', '')
+          print(f'description: {desc}')
+          assert desc == 'Schema for my Helm chart values', f'Expected description, got: {desc}'
+          print('PASS')
+          PYEOF
+          if ! echo "$SCHEMA_CONTENT" | python3 /tmp/check_desc.py; then
+            echo "FAIL: Schema does not have expected description"
+            exit 1
+          fi
+          echo "PASS: Schema has expected description"

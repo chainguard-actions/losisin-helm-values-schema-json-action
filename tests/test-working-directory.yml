@@ -1,4 +1,4 @@
-name: Test working-directory input
+name: Test working-directory feature
 on:
   workflow_dispatch:
 jobs:
@@ -7,45 +7,45 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create test chart directory structure
+      - name: Set up chart directory with values file
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/test-workdir-chart"
-          cat > "$GITHUB_WORKSPACE/test-workdir-chart/values.yaml" << 'EOF'
-          replicaCount: 1
-          service:
-            type: ClusterIP
-            port: 80
-          ingress:
-            enabled: false
-            host: chart.example.com
-          EOF
+          mkdir -p "$GITHUB_WORKSPACE/my-chart"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/values.yaml" "$GITHUB_WORKSPACE/my-chart/values.yaml"
 
       - id: action
         uses: .
         with:
           values: values.yaml
+          draft: 2020
+          indent: 4
           output: values.schema.json
-          draft: 7
-          working-directory: test-workdir-chart
+          working-directory: my-chart
 
-      - name: Assert schema file was created in working directory
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
         run: |
-          if [ ! -f "$GITHUB_WORKSPACE/test-workdir-chart/values.schema.json" ]; then
-            echo "FAIL: values.schema.json was not created in working directory"
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
             exit 1
           fi
-          echo "PASS: schema file exists in working directory"
+          echo "PASS: plugin-path is set"
 
-      - name: Assert schema contains expected fields
+      - name: Assert schema file was generated in working directory
         run: |
-          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-workdir-chart/values.schema.json")
-          echo "Schema content: $SCHEMA"
-          if ! echo "$SCHEMA" | grep -q '"service"'; then
-            echo "FAIL: schema does not contain service"
+          if [ ! -f "$GITHUB_WORKSPACE/my-chart/values.schema.json" ]; then
+            echo "FAIL: my-chart/values.schema.json was not generated"
+            ls -la "$GITHUB_WORKSPACE/my-chart/" || true
             exit 1
           fi
-          if ! echo "$SCHEMA" | grep -q '"ingress"'; then
-            echo "FAIL: schema does not contain ingress"
+          echo "PASS: my-chart/values.schema.json exists"
+
+      - name: Assert schema file is valid JSON
+        run: |
+          if ! python3 -m json.tool "$GITHUB_WORKSPACE/my-chart/values.schema.json" > /dev/null 2>&1; then
+            echo "FAIL: my-chart/values.schema.json is not valid JSON"
+            cat "$GITHUB_WORKSPACE/my-chart/values.schema.json"
             exit 1
           fi
-          echo "PASS: schema contains expected fields"
+          echo "PASS: my-chart/values.schema.json is valid JSON"

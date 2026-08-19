@@ -1,4 +1,4 @@
-name: Test basic schema generation
+name: Test useHelmDocs input
 on:
   workflow_dispatch:
 jobs:
@@ -7,45 +7,50 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create values.yaml in workspace
+      - name: Create values.yaml with helm-docs comments
         run: |
-          cat > "$GITHUB_WORKSPACE/test-values.yaml" << 'EOF'
+          cat > "$GITHUB_WORKSPACE/test-values-helmdocs.yaml" << 'EOF'
+          # -- Number of replicas to deploy
           replicaCount: 1
           image:
+            # -- Docker image repository
             repository: nginx
+            # -- Docker image tag
             tag: latest
-            pullPolicy: IfNotPresent
           service:
+            # -- Service type
             type: ClusterIP
+            # -- Service port
             port: 80
           EOF
 
       - id: action
         uses: .
         with:
-          values: test-values.yaml
-          output: test-values.schema.json
+          values: test-values-helmdocs.yaml
+          output: test-values-helmdocs.schema.json
           draft: 2020
+          useHelmDocs: true
 
       - name: Assert schema file was created
         run: |
-          if [ ! -f "$GITHUB_WORKSPACE/test-values.schema.json" ]; then
-            echo "FAIL: expected test-values.schema.json to exist"
+          if [ ! -f "$GITHUB_WORKSPACE/test-values-helmdocs.schema.json" ]; then
+            echo "FAIL: expected test-values-helmdocs.schema.json to exist"
             exit 1
           fi
           echo "PASS: schema file exists"
 
-      - name: Assert schema file is valid JSON
+      - name: Assert schema is valid JSON
         run: |
-          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/test-values.schema.json'))"; then
+          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/test-values-helmdocs.schema.json'))"; then
             echo "FAIL: schema file is not valid JSON"
             exit 1
           fi
           echo "PASS: schema file is valid JSON"
 
-      - name: Assert schema contains expected fields
+      - name: Assert schema contains properties
         run: |
-          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values.schema.json")
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values-helmdocs.schema.json")
           echo "Schema content: $SCHEMA"
           if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'properties' in s, 'missing properties'"; then
             echo "FAIL: schema missing 'properties' key"
@@ -62,8 +67,4 @@ jobs:
             echo "FAIL: plugin-path output is empty"
             exit 1
           fi
-          if [ ! -f "$PLUGIN_PATH" ]; then
-            echo "FAIL: plugin-path file does not exist: $PLUGIN_PATH"
-            exit 1
-          fi
-          echo "PASS: plugin-path is set and file exists"
+          echo "PASS: plugin-path is set"

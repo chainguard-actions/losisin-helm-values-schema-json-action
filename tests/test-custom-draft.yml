@@ -1,0 +1,55 @@
+name: Test custom draft version and indent
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml in workspace
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-values-draft.yaml" << 'EOF'
+          app:
+            name: myapp
+            version: "1.0.0"
+          database:
+            host: localhost
+            port: 5432
+            name: mydb
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-values-draft.yaml
+          output: test-values-draft7.schema.json
+          draft: 7
+          indent: 2
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-values-draft7.schema.json" ]; then
+            echo "FAIL: expected test-values-draft7.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema uses draft-07
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values-draft7.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q "draft-07"; then
+            echo "FAIL: schema does not reference draft-07"
+            exit 1
+          fi
+          echo "PASS: schema references draft-07"
+
+      - name: Assert schema uses 2-space indentation
+        run: |
+          # Check that the file uses 2-space indentation (lines starting with exactly 2 spaces)
+          if ! grep -E "^  \"" "$GITHUB_WORKSPACE/test-values-draft7.schema.json"; then
+            echo "FAIL: schema does not appear to use 2-space indentation"
+            exit 1
+          fi
+          echo "PASS: schema uses 2-space indentation"

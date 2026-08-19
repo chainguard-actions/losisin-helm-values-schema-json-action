@@ -1,0 +1,58 @@
+name: Test fail-on-diff with no changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml in workspace
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-nodiff-values.yaml" << 'EOF'
+          replicaCount: 1
+          image:
+            repository: nginx
+            tag: latest
+          EOF
+
+      # First run: generate the schema without fail-on-diff
+      - id: first-run
+        uses: .
+        with:
+          values: test-nodiff-values.yaml
+          output: test-nodiff.schema.json
+          draft: 2020
+
+      - name: Assert schema was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-nodiff.schema.json" ]; then
+            echo "FAIL: schema was not generated in first run"
+            exit 1
+          fi
+          echo "PASS: schema generated"
+          cat "$GITHUB_WORKSPACE/test-nodiff.schema.json"
+
+      # Second run: regenerate with same inputs - should not fail since fail-on-diff is false
+      - id: second-run
+        uses: .
+        with:
+          values: test-nodiff-values.yaml
+          output: test-nodiff.schema.json
+          draft: 2020
+          fail-on-diff: false
+
+      - name: Assert second run succeeded
+        run: |
+          echo "PASS: second run completed without failure"
+
+      - name: Assert plugin-path output is set on second run
+        env:
+          PLUGIN_PATH: ${{ steps.second-run.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty on second run"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

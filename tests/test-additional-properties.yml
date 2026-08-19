@@ -1,0 +1,64 @@
+name: Test additionalProperties and id inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create values.yaml in workspace
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-values-addl.yaml" << 'EOF'
+          config:
+            timeout: 30
+            retries: 3
+          service:
+            port: 80
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          values: test-values-addl.yaml
+          output: test-values-addl.schema.json
+          draft: 2020
+          additionalProperties: true
+          id: https://example.com/my-schema
+
+      - name: Assert schema file was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/test-values-addl.schema.json" ]; then
+            echo "FAIL: expected test-values-addl.schema.json to exist"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/test-values-addl.schema.json'))"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema file is valid JSON"
+
+      - name: Assert schema contains id
+        run: |
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values-addl.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q "example.com/my-schema"; then
+            echo "FAIL: schema does not contain the expected id"
+            exit 1
+          fi
+          echo "PASS: schema contains id"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"

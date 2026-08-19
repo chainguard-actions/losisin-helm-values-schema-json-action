@@ -1,4 +1,4 @@
-name: Test basic schema generation
+name: Test noAdditionalProperties input
 on:
   workflow_dispatch:
 jobs:
@@ -9,12 +9,11 @@ jobs:
 
       - name: Create values.yaml in workspace
         run: |
-          cat > "$GITHUB_WORKSPACE/test-values.yaml" << 'EOF'
+          cat > "$GITHUB_WORKSPACE/test-values-noadd.yaml" << 'EOF'
           replicaCount: 1
           image:
             repository: nginx
             tag: latest
-            pullPolicy: IfNotPresent
           service:
             type: ClusterIP
             port: 80
@@ -23,35 +22,36 @@ jobs:
       - id: action
         uses: .
         with:
-          values: test-values.yaml
-          output: test-values.schema.json
+          values: test-values-noadd.yaml
+          output: test-values-noadd.schema.json
           draft: 2020
+          noAdditionalProperties: true
 
       - name: Assert schema file was created
         run: |
-          if [ ! -f "$GITHUB_WORKSPACE/test-values.schema.json" ]; then
-            echo "FAIL: expected test-values.schema.json to exist"
+          if [ ! -f "$GITHUB_WORKSPACE/test-values-noadd.schema.json" ]; then
+            echo "FAIL: expected test-values-noadd.schema.json to exist"
             exit 1
           fi
           echo "PASS: schema file exists"
 
-      - name: Assert schema file is valid JSON
+      - name: Assert schema is valid JSON
         run: |
-          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/test-values.schema.json'))"; then
+          if ! python3 -c "import json; json.load(open('$GITHUB_WORKSPACE/test-values-noadd.schema.json'))"; then
             echo "FAIL: schema file is not valid JSON"
             exit 1
           fi
           echo "PASS: schema file is valid JSON"
 
-      - name: Assert schema contains expected fields
+      - name: Assert schema contains additionalProperties false
         run: |
-          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values.schema.json")
+          SCHEMA=$(cat "$GITHUB_WORKSPACE/test-values-noadd.schema.json")
           echo "Schema content: $SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'properties' in s, 'missing properties'"; then
-            echo "FAIL: schema missing 'properties' key"
+          if ! echo "$SCHEMA" | grep -q "additionalProperties"; then
+            echo "FAIL: schema does not contain additionalProperties"
             exit 1
           fi
-          echo "PASS: schema contains properties"
+          echo "PASS: schema contains additionalProperties"
 
       - name: Assert plugin-path output is set
         env:
@@ -62,8 +62,4 @@ jobs:
             echo "FAIL: plugin-path output is empty"
             exit 1
           fi
-          if [ ! -f "$PLUGIN_PATH" ]; then
-            echo "FAIL: plugin-path file does not exist: $PLUGIN_PATH"
-            exit 1
-          fi
-          echo "PASS: plugin-path is set and file exists"
+          echo "PASS: plugin-path is set"

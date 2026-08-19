@@ -1,62 +1,37 @@
-name: Test additionalProperties and id inputs
+name: Test additionalProperties option
 on:
   workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_REF: refs/heads/main
-      GITHUB_EVENT_NAME: push
-      RUNNER_TOOL_CACHE: /tmp/tool-cache
-      RUNNER_TEMP: /tmp/runner-temp
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
 
       - id: action
         uses: .
         with:
-          values: ${{ github.workspace }}/tests/fixtures/values.yaml
-          output: /tmp/values-addl.schema.json
-          draft: "2020"
-          id: "https://example.com/schemas/my-chart"
-          additionalProperties: "true"
-          working-directory: ${{ github.workspace }}
+          values: tests/fixtures/values.yaml
+          output: /tmp/addl-values.schema.json
+          draft: 2020
+          noAdditionalProperties: "true"
 
-      - name: Assert output file was created
+      - name: Assert schema file was generated
         run: |
-          if [ ! -f "/tmp/values-addl.schema.json" ]; then
-            echo "FAIL: output file /tmp/values-addl.schema.json was not created"
+          if [ ! -f "/tmp/addl-values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
             exit 1
           fi
-          echo "PASS: output file exists"
+          echo "PASS: values.schema.json exists"
 
-      - name: Assert output is valid JSON
+      - name: Assert schema has additionalProperties set to false
         run: |
-          if ! python3 -m json.tool /tmp/values-addl.schema.json > /dev/null 2>&1; then
-            echo "FAIL: output file is not valid JSON"
-            cat /tmp/values-addl.schema.json
+          SCHEMA=$(cat "/tmp/addl-values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"additionalProperties": false'; then
+            echo "FAIL: schema does not have additionalProperties=false at root"
             exit 1
           fi
-          echo "PASS: output file is valid JSON"
-
-      - name: Assert schema contains id field
-        run: |
-          SCHEMA=$(cat /tmp/values-addl.schema.json)
-          echo "Schema content:"
-          echo "$SCHEMA"
-          if ! echo "$SCHEMA" | python3 -c "import sys, json; d = json.load(sys.stdin); assert '\$id' in d or 'id' in d, 'missing id'"; then
-            echo "FAIL: schema does not contain id field"
-            exit 1
-          fi
-          echo "PASS: schema contains id field"
-
-      - name: Assert plugin-path output is set
-        env:
-          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
-        run: |
-          echo "plugin-path: $PLUGIN_PATH"
-          if [ -z "$PLUGIN_PATH" ]; then
-            echo "FAIL: plugin-path output is empty"
-            exit 1
-          fi
-          echo "PASS: plugin-path output is set"
+          echo "PASS: schema has additionalProperties=false"

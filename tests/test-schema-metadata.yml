@@ -1,0 +1,47 @@
+name: Test schema root metadata options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/values.yaml
+          output: /tmp/meta-values.schema.json
+          draft: 2020
+          title: My Helm Chart Schema
+          description: Schema for my Helm chart values
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "/tmp/meta-values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema contains title
+        run: |
+          SCHEMA=$(cat "/tmp/meta-values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q 'My Helm Chart Schema'; then
+            echo "FAIL: schema does not contain expected title"
+            exit 1
+          fi
+          echo "PASS: schema contains expected title"
+
+      - name: Assert schema contains description
+        run: |
+          SCHEMA=$(cat "/tmp/meta-values.schema.json")
+          if ! echo "$SCHEMA" | grep -q 'Schema for my Helm chart values'; then
+            echo "FAIL: schema does not contain expected description"
+            exit 1
+          fi
+          echo "PASS: schema contains expected description"

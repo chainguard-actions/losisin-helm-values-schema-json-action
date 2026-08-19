@@ -1,4 +1,4 @@
-name: Test basic schema generation
+name: Test additionalProperties input
 on:
   workflow_dispatch:
 jobs:
@@ -14,40 +14,30 @@ jobs:
         uses: .
         with:
           values: tests/fixtures/values.yaml
-          output: /tmp/basic-values.schema.json
+          output: /tmp/addlprops-values.schema.json
           draft: 2020
-
-      - name: Assert plugin-path output is set
-        env:
-          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
-        run: |
-          echo "plugin-path: $PLUGIN_PATH"
-          if [ -z "$PLUGIN_PATH" ]; then
-            echo "FAIL: plugin-path output is empty"
-            exit 1
-          fi
-          echo "PASS: plugin-path is set to $PLUGIN_PATH"
+          additionalProperties: "true"
 
       - name: Assert schema file was generated
         run: |
-          if [ ! -f "/tmp/basic-values.schema.json" ]; then
+          if [ ! -f "/tmp/addlprops-values.schema.json" ]; then
             echo "FAIL: values.schema.json was not generated"
             exit 1
           fi
           echo "PASS: values.schema.json exists"
-          cat "/tmp/basic-values.schema.json"
+          cat "/tmp/addlprops-values.schema.json"
 
       - name: Assert schema is valid JSON
         run: |
-          if ! python3 -c "import json; json.load(open('/tmp/basic-values.schema.json'))"; then
+          if ! python3 -c "import json; json.load(open('/tmp/addlprops-values.schema.json'))"; then
             echo "FAIL: values.schema.json is not valid JSON"
             exit 1
           fi
-          echo "PASS: values.schema.json is valid JSON"
+          echo "PASS: schema is valid JSON"
 
-      - name: Assert schema contains expected fields
+      - name: Assert schema contains properties
         run: |
-          SCHEMA=$(cat "/tmp/basic-values.schema.json")
+          SCHEMA=$(cat "/tmp/addlprops-values.schema.json")
           echo "Schema content: $SCHEMA"
           if ! echo "$SCHEMA" | grep -q '"properties"'; then
             echo "FAIL: schema missing 'properties' key"

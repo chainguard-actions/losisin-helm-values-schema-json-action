@@ -1,16 +1,16 @@
-# -- Number of replicas
+# -- Number of replicas to deploy
 replicaCount: 1
 
 image:
   # -- Container image repository
   repository: nginx
+  # -- Container image tag
+  tag: latest
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Image tag
-  tag: ""
 
 service:
-  # -- Service type
+  # -- Kubernetes service type
   type: ClusterIP
   # -- Service port
   port: 80

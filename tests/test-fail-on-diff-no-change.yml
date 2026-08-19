@@ -1,0 +1,53 @@
+name: Test fail-on-diff with no changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - name: Setup git user for commits
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+
+      - name: Generate schema first time
+        id: first-run
+        uses: .
+        with:
+          values: tests/fixtures/values.yaml
+          output: tests/fixtures/diff-output/values.schema.json
+          draft: 2020
+
+      - name: Assert schema was generated
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/tests/fixtures/diff-output/values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated on first run"
+            exit 1
+          fi
+          echo "PASS: schema generated on first run"
+          cat "$GITHUB_WORKSPACE/tests/fixtures/diff-output/values.schema.json"
+
+      - name: Commit generated schema
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p tests/fixtures/diff-output
+          git add tests/fixtures/diff-output/values.schema.json
+          git commit -m "add schema for diff test"
+
+      - name: Run again with fail-on-diff (should not fail - schema unchanged)
+        id: second-run
+        uses: .
+        with:
+          values: tests/fixtures/values.yaml
+          output: tests/fixtures/diff-output/values.schema.json
+          draft: 2020
+          fail-on-diff: "true"
+
+      - name: Assert second run succeeded
+        run: |
+          echo "PASS: second run completed without failure (schema was up to date)"

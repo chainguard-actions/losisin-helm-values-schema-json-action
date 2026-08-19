@@ -1,0 +1,55 @@
+name: Test useHelmDocs input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/values-helmdocs.yaml
+          output: /tmp/helmdocs-values.schema.json
+          draft: 2020
+          useHelmDocs: "true"
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "/tmp/helmdocs-values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json; json.load(open('/tmp/helmdocs-values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains properties from helm-docs comments
+        run: |
+          SCHEMA=$(cat "/tmp/helmdocs-values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q '"properties"'; then
+            echo "FAIL: schema missing 'properties' key"
+            exit 1
+          fi
+          echo "PASS: schema contains 'properties'"
+
+      - name: Assert schema contains description from helm-docs comment
+        run: |
+          SCHEMA=$(cat "/tmp/helmdocs-values.schema.json")
+          # The useHelmDocs flag should populate descriptions from '# --' comments
+          if ! echo "$SCHEMA" | grep -q '"description"'; then
+            echo "FAIL: schema does not contain any 'description' fields (expected from helm-docs comments)"
+            exit 1
+          fi
+          echo "PASS: schema contains description fields from helm-docs comments"

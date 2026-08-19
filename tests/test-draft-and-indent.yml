@@ -1,0 +1,48 @@
+name: Test draft version and indentation options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/values.yaml
+          output: /tmp/draft-values.schema.json
+          draft: 7
+          indent: 2
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "/tmp/draft-values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema uses draft-07
+        run: |
+          SCHEMA=$(cat "/tmp/draft-values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q 'draft-07'; then
+            echo "FAIL: schema does not reference draft-07"
+            exit 1
+          fi
+          echo "PASS: schema references draft-07"
+
+      - name: Assert schema uses 2-space indentation
+        run: |
+          SCHEMA_FILE="/tmp/draft-values.schema.json"
+          echo "Schema content:"
+          cat "$SCHEMA_FILE"
+          if ! grep -qE '^  "' "$SCHEMA_FILE"; then
+            echo "FAIL: schema does not appear to use 2-space indentation"
+            exit 1
+          fi
+          echo "PASS: schema uses 2-space indentation"

@@ -1,0 +1,45 @@
+name: Test schema ref input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - id: action
+        uses: .
+        with:
+          values: tests/fixtures/values.yaml
+          output: /tmp/ref-values.schema.json
+          draft: 2020
+          ref: "https://json-schema.org/draft/2020-12/schema"
+
+      - name: Assert schema file was generated
+        run: |
+          if [ ! -f "/tmp/ref-values.schema.json" ]; then
+            echo "FAIL: values.schema.json was not generated"
+            exit 1
+          fi
+          echo "PASS: values.schema.json exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          if ! python3 -c "import json; json.load(open('/tmp/ref-values.schema.json'))"; then
+            echo "FAIL: values.schema.json is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains the expected ref
+        run: |
+          SCHEMA=$(cat "/tmp/ref-values.schema.json")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | grep -q 'json-schema.org'; then
+            echo "FAIL: schema does not contain expected ref"
+            exit 1
+          fi
+          echo "PASS: schema contains expected ref"

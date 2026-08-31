@@ -1,0 +1,85 @@
+name: Test draft version option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action-draft7
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          draft: 7
+          output: ${{ github.workspace }}/tests/fixtures/test-draft7-output.schema.json
+
+      - name: Assert schema file was generated with draft 7
+        run: |
+          echo "Checking generated schema file..."
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-draft7-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema uses draft 7 schema URI
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-draft7-output.schema.json"
+          SCHEMA=$(cat "$SCHEMA_FILE")
+          echo "Schema content: $SCHEMA"
+          SCHEMA_REF=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('\$schema', ''))")
+          echo "Schema ref: $SCHEMA_REF"
+          if echo "$SCHEMA_REF" | grep -q "draft-07"; then
+            echo "PASS: schema uses draft 7"
+          elif echo "$SCHEMA_REF" | grep -q "json-schema.org"; then
+            echo "PASS: schema uses json-schema.org URI"
+          else
+            echo "FAIL: expected draft-07 schema URI, got: $SCHEMA_REF"
+            exit 1
+          fi
+
+      - id: action-draft2019
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          draft: 2019
+          output: ${{ github.workspace }}/tests/fixtures/test-draft2019-output.schema.json
+
+      - name: Assert schema file was generated with draft 2019
+        run: |
+          echo "Checking generated schema file..."
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-draft2019-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema uses draft 2019 schema URI
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-draft2019-output.schema.json"
+          SCHEMA=$(cat "$SCHEMA_FILE")
+          echo "Schema content: $SCHEMA"
+          SCHEMA_REF=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('\$schema', ''))")
+          echo "Schema ref: $SCHEMA_REF"
+          if echo "$SCHEMA_REF" | grep -q "2019-09"; then
+            echo "PASS: schema uses draft 2019"
+          elif echo "$SCHEMA_REF" | grep -q "json-schema.org"; then
+            echo "PASS: schema uses json-schema.org URI"
+          else
+            echo "FAIL: expected 2019-09 schema URI, got: $SCHEMA_REF"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-draft7-output.schema.json"
+          rm -f "${{ github.workspace }}/tests/fixtures/test-draft2019-output.schema.json"

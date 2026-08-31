@@ -1,0 +1,74 @@
+name: Test schema metadata options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json
+          title: "My Helm Chart Values"
+          description: "Schema for my helm chart values"
+          id: "https://example.com/schema/my-chart"
+
+      - name: Assert schema file was generated
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+          cat "$SCHEMA_FILE"
+
+      - name: Assert schema contains title
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json")
+          echo "Schema: $SCHEMA"
+          TITLE=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('title', ''))")
+          echo "Title: $TITLE"
+          if [ "$TITLE" = "My Helm Chart Values" ]; then
+            echo "PASS: title is correct"
+          else
+            echo "FAIL: expected title 'My Helm Chart Values', got: $TITLE"
+            exit 1
+          fi
+
+      - name: Assert schema contains description
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json")
+          DESC=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('description', ''))")
+          echo "Description: $DESC"
+          if [ "$DESC" = "Schema for my helm chart values" ]; then
+            echo "PASS: description is correct"
+          else
+            echo "FAIL: expected description 'Schema for my helm chart values', got: $DESC"
+            exit 1
+          fi
+
+      - name: Assert schema contains id
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json")
+          SCHEMA_ID=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('\$id', s.get('id', '')))")
+          echo "ID: $SCHEMA_ID"
+          if echo "$SCHEMA_ID" | grep -q "example.com"; then
+            echo "PASS: id contains example.com"
+          else
+            echo "FAIL: expected id containing example.com, got: $SCHEMA_ID"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-metadata-output.schema.json"

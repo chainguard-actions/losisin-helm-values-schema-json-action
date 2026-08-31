@@ -1,0 +1,87 @@
+name: Test fail-on-diff option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      # Generate the initial schema (no fail-on-diff, just generate)
+      - name: Generate initial schema
+        id: generate-initial
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: tests/fixtures/test-fail-on-diff-output.schema.json
+
+      - name: Commit the generated schema so git tracks it
+        run: |
+          git add tests/fixtures/test-fail-on-diff-output.schema.json
+          # Only commit if there are staged changes
+          if git diff --cached --quiet; then
+            echo "Schema already committed and up to date"
+          else
+            git commit -m "add test schema for fail-on-diff test"
+            echo "Committed schema"
+          fi
+          echo "Current schema:"
+          cat "$GITHUB_WORKSPACE/tests/fixtures/test-fail-on-diff-output.schema.json"
+
+      # Run with fail-on-diff=true - schema is committed and up to date, should succeed
+      - id: action-no-diff
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: tests/fixtures/test-fail-on-diff-output.schema.json
+          fail-on-diff: "true"
+
+      - name: Assert action succeeded when schema is up to date
+        env:
+          OUTCOME: ${{ steps.action-no-diff.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected success when schema is up to date, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action succeeded when schema is up to date"
+
+      # Overwrite the schema with different content and commit it
+      - name: Commit a different schema to create a diff scenario
+        run: |
+          echo '{"modified": true, "description": "intentionally wrong schema"}' > "$GITHUB_WORKSPACE/tests/fixtures/test-fail-on-diff-output.schema.json"
+          git add tests/fixtures/test-fail-on-diff-output.schema.json
+          git commit -m "modify schema to create diff for testing"
+          echo "Modified and committed schema:"
+          cat "$GITHUB_WORKSPACE/tests/fixtures/test-fail-on-diff-output.schema.json"
+
+      # Run with fail-on-diff=true - action regenerates correct schema which differs from committed wrong schema
+      - id: action-with-diff
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: tests/fixtures/test-fail-on-diff-output.schema.json
+          fail-on-diff: "true"
+        continue-on-error: true
+
+      - name: Assert action failed when schema has diff
+        env:
+          OUTCOME: ${{ steps.action-with-diff.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected failure when schema has diff, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when schema has diff"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "$GITHUB_WORKSPACE/tests/fixtures/test-fail-on-diff-output.schema.json"

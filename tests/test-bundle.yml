@@ -1,0 +1,57 @@
+name: Test bundle options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-bundle-output.schema.json
+          bundle: "true"
+          bundle-root: ${{ github.workspace }}/tests/fixtures
+          bundle-without-id: "true"
+
+      - name: Assert schema file was generated
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-bundle-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+          cat "$SCHEMA_FILE"
+
+      - name: Assert schema is valid JSON
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-bundle-output.schema.json"
+          if ! python3 -c "import json, sys; json.load(open('$SCHEMA_FILE'))"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema file is valid JSON"
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set to '$PLUGIN_PATH'"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-bundle-output.schema.json"

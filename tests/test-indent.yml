@@ -1,0 +1,77 @@
+name: Test indent option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action-indent2
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-indent2-output.schema.json
+          indent: 2
+
+      - name: Assert schema file was generated with indent 2
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-indent2-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON with 2-space indent
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-indent2-output.schema.json"
+          SCHEMA=$(cat "$SCHEMA_FILE")
+          echo "Schema content:"
+          echo "$SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; json.load(sys.stdin)"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - id: action-indent4
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-indent4-output.schema.json
+          indent: 4
+
+      - name: Assert schema file was generated with indent 4
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-indent4-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schemas differ in indentation
+        run: |
+          FILE2="${{ github.workspace }}/tests/fixtures/test-indent2-output.schema.json"
+          FILE4="${{ github.workspace }}/tests/fixtures/test-indent4-output.schema.json"
+          SIZE2=$(wc -c < "$FILE2")
+          SIZE4=$(wc -c < "$FILE4")
+          echo "Size with indent=2: $SIZE2"
+          echo "Size with indent=4: $SIZE4"
+          if [ "$SIZE4" -le "$SIZE2" ]; then
+            echo "FAIL: expected 4-space indented file to be larger than 2-space indented file"
+            exit 1
+          fi
+          echo "PASS: 4-space indented file is larger than 2-space indented file"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-indent2-output.schema.json"
+          rm -f "${{ github.workspace }}/tests/fixtures/test-indent4-output.schema.json"

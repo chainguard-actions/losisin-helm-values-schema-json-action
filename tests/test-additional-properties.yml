@@ -1,0 +1,78 @@
+name: Test additionalProperties option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action-no-additional
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-no-additional-output.schema.json
+          additionalProperties: "false"
+
+      - name: Assert schema file was generated
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-no-additional-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+          cat "$SCHEMA_FILE"
+
+      - name: Assert schema has additionalProperties set to false
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-no-additional-output.schema.json")
+          echo "Schema: $SCHEMA"
+          ADDITIONAL=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('additionalProperties', 'MISSING'))")
+          echo "additionalProperties: $ADDITIONAL"
+          if [ "$ADDITIONAL" = "False" ]; then
+            echo "PASS: additionalProperties is false"
+          else
+            echo "FAIL: expected additionalProperties=False, got: $ADDITIONAL"
+            exit 1
+          fi
+
+      - id: action-with-additional
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-with-additional-output.schema.json
+          additionalProperties: "true"
+
+      - name: Assert schema file was generated with additionalProperties true
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-with-additional-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema has additionalProperties set to true
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-with-additional-output.schema.json")
+          echo "Schema: $SCHEMA"
+          ADDITIONAL=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(s.get('additionalProperties', 'MISSING'))")
+          echo "additionalProperties: $ADDITIONAL"
+          if [ "$ADDITIONAL" = "True" ]; then
+            echo "PASS: additionalProperties is true"
+          else
+            echo "FAIL: expected additionalProperties=True, got: $ADDITIONAL"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-no-additional-output.schema.json"
+          rm -f "${{ github.workspace }}/tests/fixtures/test-with-additional-output.schema.json"

@@ -1,0 +1,83 @@
+name: Test multiple values files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        with:
+          values: ${{ github.workspace }}/tests/fixtures/values.yaml,${{ github.workspace }}/tests/fixtures/values-extra.yaml
+          output: ${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json
+
+      - name: Assert plugin-path output is set
+        env:
+          PLUGIN_PATH: ${{ steps.action.outputs.plugin-path }}
+        run: |
+          echo "plugin-path: $PLUGIN_PATH"
+          if [ -z "$PLUGIN_PATH" ]; then
+            echo "FAIL: plugin-path output is empty"
+            exit 1
+          fi
+          echo "PASS: plugin-path is set"
+
+      - name: Assert schema file was generated
+        run: |
+          echo "Checking generated schema file..."
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json"
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "FAIL: schema file not found at $SCHEMA_FILE"
+            exit 1
+          fi
+          echo "PASS: schema file exists"
+
+      - name: Assert schema is valid JSON
+        run: |
+          SCHEMA_FILE="${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json"
+          SCHEMA=$(cat "$SCHEMA_FILE")
+          echo "Schema content: $SCHEMA"
+          if ! echo "$SCHEMA" | python3 -c "import json,sys; json.load(sys.stdin)"; then
+            echo "FAIL: schema file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: schema is valid JSON"
+
+      - name: Assert schema contains properties from values.yaml
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json")
+          PROPS=$(echo "$SCHEMA" | python3 -c "import json,sys; s=json.load(sys.stdin); print(list(s.get('properties', {}).keys()))")
+          echo "Properties found: $PROPS"
+          if echo "$SCHEMA" | grep -q '"replicaCount"'; then
+            echo "PASS: found replicaCount from values.yaml"
+          elif echo "$SCHEMA" | grep -q '"image"'; then
+            echo "PASS: found image from values.yaml"
+          else
+            echo "FAIL: missing properties from values.yaml"
+            exit 1
+          fi
+
+      - name: Assert schema contains properties from values-extra.yaml
+        run: |
+          SCHEMA=$(cat "${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json")
+          if echo "$SCHEMA" | grep -q '"ingress"'; then
+            echo "PASS: found ingress from values-extra.yaml"
+          elif echo "$SCHEMA" | grep -q '"nodeSelector"'; then
+            echo "PASS: found nodeSelector from values-extra.yaml"
+          else
+            echo "FAIL: missing properties from values-extra.yaml"
+            exit 1
+          fi
+          echo "PASS: schema contains properties from multiple values files"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "${{ github.workspace }}/tests/fixtures/test-multi-output.schema.json"

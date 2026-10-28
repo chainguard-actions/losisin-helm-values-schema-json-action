@@ -6,15 +6,15 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 ## Versions
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v2.4.0 | [`v2.4.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.4.0) | [`b8221c7`](https://github.com/losisin/helm-values-schema-json-action/commit/b8221c7de609ce67adcacc4c3b18c2fdd50775c1) |
-| v2.4.1 | [`v2.4.1`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.4.1) | [`b0c5e68`](https://github.com/losisin/helm-values-schema-json-action/commit/b0c5e688b224ce7c36fcf005184f1105850d8f3b) |
-| v2.5.0 | [`v2.5.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.5.0) | [`02bda41`](https://github.com/losisin/helm-values-schema-json-action/commit/02bda41b469ccfb3f0abb35f4211e598b0b6ea3e) |
-| v3.0.0 | [`v3.0.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.0) | [`39cdf80`](https://github.com/losisin/helm-values-schema-json-action/commit/39cdf80504f6c95ad3c4f317e2135e2509ea56bb) |
-| v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.1) | [`cfefdf4`](https://github.com/losisin/helm-values-schema-json-action/commit/cfefdf4241da6dbe17f3378e3cd0e863d4a4c3c8) |
-| v3.1.0 | [`v3.1.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.1.0) | [`9f55598`](https://github.com/losisin/helm-values-schema-json-action/commit/9f555986124362af978a9861cf0f81e1956300ad) |
-| v3.2.0 | [`v3.2.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.2.0) | [`9ed68d9`](https://github.com/losisin/helm-values-schema-json-action/commit/9ed68d9d464a5e6f7f5fc1f3dc071828cf7d13a2) |
+| Version | Tag | Upstream commit | Hardening report |
+|---------|-----|-----------------|------------------|
+| v2.4.0 | [`v2.4.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.4.0) | [`b8221c7`](https://github.com/losisin/helm-values-schema-json-action/commit/b8221c7de609ce67adcacc4c3b18c2fdd50775c1) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v2.4.0/HARDENING.md) |
+| v2.4.1 | [`v2.4.1`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.4.1) | [`b0c5e68`](https://github.com/losisin/helm-values-schema-json-action/commit/b0c5e688b224ce7c36fcf005184f1105850d8f3b) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v2.4.1/HARDENING.md) |
+| v2.5.0 | [`v2.5.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v2.5.0) | [`02bda41`](https://github.com/losisin/helm-values-schema-json-action/commit/02bda41b469ccfb3f0abb35f4211e598b0b6ea3e) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v2.5.0/HARDENING.md) |
+| v3.0.0 | [`v3.0.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.0) | [`39cdf80`](https://github.com/losisin/helm-values-schema-json-action/commit/39cdf80504f6c95ad3c4f317e2135e2509ea56bb) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v3.0.0/HARDENING.md) |
+| v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.0.1) | [`cfefdf4`](https://github.com/losisin/helm-values-schema-json-action/commit/cfefdf4241da6dbe17f3378e3cd0e863d4a4c3c8) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v3.0.1/HARDENING.md) |
+| v3.1.0 | [`v3.1.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.1.0) | [`9f55598`](https://github.com/losisin/helm-values-schema-json-action/commit/9f555986124362af978a9861cf0f81e1956300ad) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v3.1.0/HARDENING.md) |
+| v3.2.0 | [`v3.2.0`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/tree/v3.2.0) | [`9ed68d9`](https://github.com/losisin/helm-values-schema-json-action/commit/9ed68d9d464a5e6f7f5fc1f3dc071828cf7d13a2) | [`HARDENING.md`](https://github.com/chainguard-actions/losisin-helm-values-schema-json-action/blob/v3.2.0/HARDENING.md) |
 
 ## Privacy
 
